@@ -1,0 +1,18 @@
+{
+  "name": "prepper-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Backend API service for Prepper meal planning app",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "keywords": ["meal-prep", "recipes", "api"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
