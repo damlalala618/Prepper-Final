@@ -4,14 +4,49 @@
   import InfoModal from '$lib/components/InfoModal.svelte';
   import { getMonday, getWeekRangeString, formatLongDate, addDays, getDayName } from '$lib/utils/date';
 
+  const BACKEND_URL = 'http://localhost:4000';
+
   let showInfoModal = false;
   let viewMode = 'week'; // 'today' or 'week'
   let currentDate = new Date();
   let monday = getMonday(currentDate);
+  let favorites = [];
+  let loadingFavorites = true;
 
   $: dateDisplay = viewMode === 'today' 
     ? formatLongDate(currentDate)
     : getWeekRangeString(monday);
+
+  onMount(async () => {
+    await loadFavorites();
+  });
+
+  async function loadFavorites() {
+    loadingFavorites = true;
+    try {
+      const favs = [];
+      // Fetch 6 random recipes for favorites
+      for (let i = 0; i < 6; i++) {
+        const res = await fetch(`${BACKEND_URL}/api/recipes/random`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.recipe) {
+            favs.push({
+              id: data.recipe.id,
+              name: data.recipe.title,
+              image: data.recipe.image
+            });
+          }
+        }
+      }
+      favorites = favs;
+    } catch (error) {
+      console.error('Failed to load favorites:', error);
+      favorites = [];
+    } finally {
+      loadingFavorites = false;
+    }
+  }
 
   function navigatePrev() {
     if (viewMode === 'today') {
@@ -32,16 +67,6 @@
   function setViewMode(mode) {
     viewMode = mode;
   }
-
-  // Mock favorites data
-  const favorites = [
-    { id: 1, name: 'Chicken Tikka', image: '' },
-    { id: 2, name: 'Pasta Primavera', image: '' },
-    { id: 3, name: 'Beef Stir Fry', image: '' },
-    { id: 4, name: 'Greek Salad', image: '' },
-    { id: 5, name: 'Fish Tacos', image: '' },
-    { id: 6, name: 'Veggie Curry', image: '' }
-  ];
 </script>
 
 <svelte:head>
@@ -52,7 +77,7 @@
   <header class="header">
     <h1 class="logo">🌶️ Prepper</h1>
     <div class="header-actions">
-      <button class="icon-btn" aria-label="Search">
+      <button class="icon-btn" aria-label="Search" on:click={() => goto('/search')}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
           <path d="m21 21-4.35-4.35"/>
@@ -119,19 +144,29 @@
     <section class="favorites-section">
       <h2>Prepper Favorites</h2>
       <div class="favorites-scroll">
-        {#each favorites as favorite}
-          <div class="favorite-card">
-            <div class="favorite-image">
-              {#if favorite.image}
-                <img src={favorite.image} alt={favorite.name} />
-              {:else}
-                <div class="placeholder-image">
-                  <span class="placeholder-text">Recipe {favorite.id}<br/>IMAGE</span>
-                </div>
-              {/if}
+        {#if loadingFavorites}
+          {#each Array(6) as _, i}
+            <div class="favorite-card">
+              <div class="favorite-image loading-shimmer"></div>
+              <p class="favorite-name loading-shimmer-text">Loading...</p>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {:else}
+          {#each favorites as favorite}
+            <div class="favorite-card">
+              <div class="favorite-image">
+                {#if favorite.image}
+                  <img src={favorite.image} alt={favorite.name} />
+                {:else}
+                  <div class="placeholder-image">
+                    <span class="placeholder-text">No Image</span>
+                  </div>
+                {/if}
+              </div>
+              <p class="favorite-name">{favorite.name}</p>
+            </div>
+          {/each}
+        {/if}
       </div>
     </section>
   </div>
@@ -373,5 +408,44 @@
     font-size: 0.875rem;
     font-weight: 500;
     text-align: center;
+    color: var(--color-text);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .loading-shimmer {
+    animation: shimmer 1.5s infinite;
+    background: linear-gradient(
+      90deg,
+      var(--color-yellow) 0%,
+      #f0dda5 50%,
+      var(--color-yellow) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  .loading-shimmer-text {
+    height: 1rem;
+    background: var(--color-bg-light);
+    border-radius: 4px;
+    animation: shimmer 1.5s infinite;
+    background: linear-gradient(
+      90deg,
+      var(--color-bg-light) 0%,
+      #e8e8e8 50%,
+      var(--color-bg-light) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 </style>
