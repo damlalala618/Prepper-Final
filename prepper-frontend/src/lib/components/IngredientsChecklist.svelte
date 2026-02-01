@@ -106,11 +106,12 @@
   }
 
   .shopping-summary {
-    background: var(--color-bg-light);
+    background: var(--color-yellow);
   }
 
   .shopping-summary h3 {
     font-size: 1.125rem;
+    color: var(--color-red);
     margin-bottom: var(--spacing-md);
   }
 

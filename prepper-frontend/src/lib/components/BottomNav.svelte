@@ -57,7 +57,7 @@
   }
 
   a.active {
-    color: var(--color-primary);
+    color: var(--color-green);
   }
 
   a.active::before {
@@ -69,7 +69,7 @@
     width: 60%;
     max-width: 80px;
     height: 3px;
-    background: var(--color-primary);
+    background: var(--color-green);
   }
 
   /* Active state for mobile tap */

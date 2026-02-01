@@ -73,7 +73,7 @@
   .brand {
     font-size: clamp(2.5rem, 10vw, 3.5rem);
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--color-red);
     margin-bottom: var(--spacing-lg);
   }
 

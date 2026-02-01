@@ -143,6 +143,7 @@
     flex: 1;
     padding-right: var(--spacing-md);
     font-size: clamp(1.125rem, 4vw, 1.5rem);
+    color: var(--color-red);
   }
 
   .close-btn {

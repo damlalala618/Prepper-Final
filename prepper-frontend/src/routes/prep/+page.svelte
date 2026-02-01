@@ -114,7 +114,7 @@
     {:else}
       <!-- Plan exists -->
       <div class="plan-summary card">
-        <h3>{selectedMeal.mainDish.title}</h3>
+        <h2 class="recipe-title">{selectedMeal.mainDish.title}</h2>
         <p class="sides-info">+ {selectedMeal.sides.length} sides</p>
         
         <div class="portion-adjuster">
@@ -215,8 +215,9 @@
     margin-bottom: var(--spacing-lg);
   }
 
-  .plan-summary h3 {
-    font-size: 1.25rem;
+  .recipe-title {
+    font-size: clamp(1.5rem, 5vw, 1.75rem);
+    color: var(--color-red);
     margin-bottom: var(--spacing-xs);
   }
 
@@ -334,7 +335,7 @@
 
   .step-item.active {
     opacity: 1;
-    border-color: var(--color-primary);
+    border-color: var(--color-orange);
     box-shadow: var(--shadow-md);
   }
 
@@ -371,9 +372,9 @@
   }
 
   .step-item.active .step-number {
-    background: var(--color-primary);
+    background: var(--color-orange);
     color: white;
-    border-color: var(--color-primary);
+    border-color: var(--color-orange);
   }
 
   .step-content {

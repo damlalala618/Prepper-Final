@@ -16,6 +16,7 @@
   let fridgeContents = '';
   let generatedMeals = [];
   let loading = false;
+  let showLoadingScreen = false;
   let showNutrition = false;
   let selectedRecipe = null;
   let showRecipeModal = false;
@@ -52,6 +53,9 @@
 
   async function generatePlan() {
     loading = true;
+    showLoadingScreen = true;
+    
+    const startTime = Date.now();
     
     try {
       const daysToGenerate = periodType === 'week' 
@@ -117,9 +121,20 @@
       }
 
       generatedMeals = meals;
+      
+      // Ensure minimum 3 seconds loading time
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, 3000 - elapsedTime);
+      
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+      }
+      
+      showLoadingScreen = false;
       currentStep = 3;
     } catch (error) {
       console.error('Error generating plan:', error);
+      showLoadingScreen = false;
       alert('Failed to generate plan. Please ensure the backend is running.');
     } finally {
       loading = false;
@@ -176,163 +191,174 @@
   <title>Plan - Prepper</title>
 </svelte:head>
 
-<div class="plan-page">
-  <div class="container">
-    <h1>Plan Your Week</h1>
-
-    <!-- Stepper -->
-    <div class="stepper">
-      <div class="step" class:active={currentStep >= 1}>
-        <div class="step-dot" class:filled={currentStep >= 1}>1</div>
-        <div class="step-line" class:filled={currentStep >= 2}></div>
-      </div>
-      <div class="step" class:active={currentStep >= 2}>
-        <div class="step-dot" class:filled={currentStep >= 2}>2</div>
-        <div class="step-line" class:filled={currentStep >= 3}></div>
-      </div>
-      <div class="step" class:active={currentStep >= 3}>
-        <div class="step-dot" class:filled={currentStep >= 3}>3</div>
+<div class="plan-page" class:is-modal={currentStep < 3} class:is-results={currentStep === 3}>
+  {#if showLoadingScreen}
+    <!-- Loading Screen -->
+    <div class="loading-screen">
+      <div class="loading-content">
+        <h1 class="loading-text"><span class="green-p">P</span>repping<br/>your plan...</h1>
       </div>
     </div>
-
-    {#if currentStep === 1}
-      <!-- Step 1: Period Selection -->
-      <div class="step-content">
-        <h2>Choose Your Period</h2>
-
-        <div class="radio-group">
-          <label class="radio-option">
-            <input 
-              type="radio" 
-              value="week" 
-              bind:group={periodType}
-            />
-            <span>Whole Week</span>
-          </label>
-          <label class="radio-option">
-            <input 
-              type="radio" 
-              value="days" 
-              bind:group={periodType}
-            />
-            <span>Individual Days</span>
-          </label>
-        </div>
-
-        <div class="date-navigation">
-          <button class="nav-btn" on:click={prevWeek}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-          </button>
-          <span class="date-label">{getWeekRangeString(weekStart)}</span>
-          <button class="nav-btn" on:click={nextWeek}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </button>
-        </div>
-
-        {#if periodType === 'days'}
-          <div class="days-checkboxes">
-            {#each dayNames as day}
-              <label class="checkbox-option">
-                <input 
-                  type="checkbox" 
-                  checked={selectedDays.includes(day)}
-                  on:change={() => toggleDay(day)}
-                />
-                <span>{day}</span>
-              </label>
-            {/each}
-          </div>
-        {/if}
-
-        <button class="btn-primary" on:click={() => goToStep(2)}>
-          Next
-        </button>
+  {:else if currentStep === 3}
+    <!-- Step 3: Results - Full Page View -->
+    <div class="container">
+      <div class="results-header">
+        <h1>Prepper</h1>
       </div>
-    {/if}
+      
+      <p class="results-intro">
+        Here's your plan! You can swipe to change recipe, click on it to see more. You can also adjust the plan and when you like it, save it.
+      </p>
+
+      <div class="meals-list">
+        {#each generatedMeals as meal, i}
+          <div class="meal-day-card">
+            <div class="day-header">
+              <h3 class="day-name">{meal.dayName} <span class="day-date">{meal.date}</span></h3>
+            </div>
+            <div class="meal-info">
+              <h4 class="meal-title">{meal.mainDish.title}</h4>
+              <div class="meal-meta-inline">
+                {meal.portions} portions · {meal.mainDish.calories} kcal · {meal.mainDish.prepMinutes + meal.mainDish.cookMinutes} min
+              </div>
+            </div>
+            {#if meal.mainDish.image}
+              <button class="meal-image-card" on:click={() => viewRecipe(meal.mainDish)}>
+                <img src={meal.mainDish.image} alt={meal.mainDish.title} />
+              </button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      <button class="btn-primary save-plan-btn" on:click={savePlan}>
+        Save This Plan
+      </button>
+    </div>
+  {:else}
+  <div class="plan-overlay">
+    <div class="plan-modal">
+      <h1 class="modal-title">Plan Your Meals</h1>
+
+      {#if currentStep === 1}
+        <!-- Step 1: Period Selection -->
+        <div class="step-content">
+          <div class="radio-group pill-group">
+            <button 
+              class="pill-btn" 
+              class:active={periodType === 'week'}
+              on:click={() => periodType = 'week'}
+            >
+              Whole Week
+            </button>
+            <button 
+              class="pill-btn" 
+              class:active={periodType === 'days'}
+              on:click={() => periodType = 'days'}
+            >
+              Choose Days
+            </button>
+          </div>
+
+          <div class="date-navigation">
+            <button class="nav-btn" on:click={prevWeek}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <span class="date-label">{getWeekRangeString(weekStart)}</span>
+            <button class="nav-btn" on:click={nextWeek}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          </div>
+
+          {#if periodType === 'days'}
+            <div class="days-list">
+              {#each dayNames as day, i}
+                <button
+                  class="day-row"
+                  class:selected={selectedDays.includes(day)}
+                  on:click={() => toggleDay(day)}
+                >
+                  <span>{day}</span>
+                  <span class="day-date">{formatShortDate(addDays(weekStart, i)).split(' ')[1]} {formatShortDate(addDays(weekStart, i)).split(' ')[0]}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="modal-actions">
+            <button class="btn-secondary" on:click={() => goto('/')}>
+              Back
+            </button>
+            <button class="btn-primary" on:click={() => goToStep(2)}>
+              Continue
+            </button>
+          </div>
+        </div>
+      {/if}
 
     {#if currentStep === 2}
       <!-- Step 2: Fridge Contents -->
       <div class="step-content">
-        <h2>What's in your fridge?</h2>
+        <h2>What do you already have in handy?<br/>Or do you have ingredients in mind?</h2>
 
         <textarea 
           class="input-field"
-          placeholder="Enter ingredients you have..."
+          placeholder="Type ingredients here"
           bind:value={fridgeContents}
         ></textarea>
 
-        <p class="hint">
-          <strong>Recommended:</strong> chicken, pasta, tomatoes, onions, garlic, etc.
-        </p>
+        <div class="ingredient-suggestions">
+          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Pasta' : 'Pasta'}>
+            🍝 Pasta
+          </button>
+          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Eggs' : 'Eggs'}>
+            🥚 Eggs
+          </button>
+          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Potato' : 'Potato'}>
+            🥔 Potato
+          </button>
+          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Meat' : 'Meat'}>
+            🥩 Meat
+          </button>
+        </div>
 
-        <button 
-          class="btn-primary" 
-          on:click={generatePlan}
-          disabled={loading}
-        >
-          {loading ? 'Generating...' : 'Generate Plan'}
-        </button>
-
-        <button class="btn-secondary" on:click={() => currentStep = 1} style="margin-top: 0.5rem; width: 100%;">
-          Back
-        </button>
-      </div>
-    {/if}
-
-    {#if currentStep === 3}
-      <!-- Step 3: Results -->
-      <div class="step-content">
-        <h2>Your Meal Plan</h2>
-
-        <button 
-          class="nutrition-toggle btn-secondary" 
-          on:click={() => showNutrition = !showNutrition}
-        >
-          {showNutrition ? 'Hide' : 'Show'} Nutrition Panel
-        </button>
-
-        {#if showNutrition}
-          <div class="nutrition-panel card">
-            <h3>Nutrition Summary</h3>
-            <p class="nutrition-note">Estimated values based on selected recipes</p>
-            <div class="nutrition-stats">
-              <div class="stat">
-                <span class="stat-label">Total Calories:</span>
-                <span class="stat-value">~{generatedMeals.reduce((sum, m) => sum + m.mainDish.calories, 0)} cal</span>
-              </div>
-              <div class="stat">
-                <span class="stat-label">Avg per meal:</span>
-                <span class="stat-value">~{Math.round(generatedMeals.reduce((sum, m) => sum + m.mainDish.calories, 0) / generatedMeals.length)} cal</span>
-              </div>
-            </div>
+        {#if fridgeContents}
+          <div class="selected-chips">
+            {#each fridgeContents.split(',').map(i => i.trim()).filter(i => i) as ingredient}
+              <span class="selected-chip">
+                {ingredient}
+                <button 
+                  class="chip-remove" 
+                  on:click={() => fridgeContents = fridgeContents.split(',').map(i => i.trim()).filter(i => i !== ingredient).join(', ')}
+                >
+                  ✕
+                </button>
+              </span>
+            {/each}
           </div>
         {/if}
 
-        <div class="meals-scroll scroll-snap-x hide-scrollbar">
-          {#each generatedMeals as meal}
-            <MealCard 
-              {meal}
-              onViewRecipe={viewRecipe}
-              onSwapSides={swapSides}
-              onRegenerate={regenerate}
-            />
-          {/each}
+        <div class="modal-actions">
+          <button class="btn-secondary" on:click={() => currentStep = 1}>
+            Back
+          </button>
+          <button 
+            class="btn-primary" 
+            on:click={generatePlan}
+            disabled={loading}
+          >
+            {loading ? 'Generating...' : 'Continue'}
+          </button>
         </div>
-
-        <button class="btn-primary" on:click={savePlan}>
-          Save This Plan
-        </button>
-
-        <button class="btn-secondary" on:click={() => currentStep = 2} style="margin-top: 0.5rem; width: 100%;">
-          Back
-        </button>
       </div>
     {/if}
+    </div>
   </div>
+  {/if}
 </div>
 
 <RecipeModal 
@@ -344,133 +370,270 @@
 <style>
   .plan-page {
     min-height: 100vh;
-    background: var(--color-bg-secondary);
   }
 
-  h1 {
-    padding-top: var(--spacing-lg);
-  }
-
-  .stepper {
+  .plan-page.is-modal {
+    background: rgba(0, 0, 0, 0.5);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    margin: var(--spacing-lg) 0;
-    gap: var(--spacing-sm);
-  }
-
-  @media (min-width: 640px) {
-    .stepper {
-      gap: var(--spacing-md);
-    }
-  }
-
-  .step {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-  }
-
-  @media (min-width: 640px) {
-    .step {
-      gap: var(--spacing-md);
-    }
-  }
-
-  .step:last-child .step-line {
-    display: none;
-  }
-
-  .step-dot {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    background: var(--color-bg-light);
-    border: 2px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    color: var(--color-text-light);
-    font-size: 0.875rem;
-    flex-shrink: 0;
-  }
-
-  @media (min-width: 640px) {
-    .step-dot {
-      width: 2.5rem;
-      height: 2.5rem;
-      font-size: 1rem;
-    }
-  }
-
-  .step-dot.filled {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-    color: white;
-  }
-
-  .step-line {
-    width: 2rem;
-    height: 2px;
-    background: var(--color-border);
-  }
-
-  @media (min-width: 640px) {
-    .step-line {
-      width: 3rem;
-    }
-  }
-
-  .step-line.filled {
-    background: var(--color-primary);
-  }
-
-  .step-content {
-    background: white;
-    border-radius: var(--border-radius);
     padding: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    overflow-y: auto;
+    z-index: 999;
   }
 
-  @media (min-width: 640px) {
-    .step-content {
-      padding: var(--spacing-lg);
-    }
+  .plan-page.is-results {
+    background: var(--color-bg-secondary);
+    padding-bottom: calc(var(--bottom-nav-height) + var(--spacing-md));
   }
 
-  @media (min-width: 1024px) {
-    .step-content {
-      padding: var(--spacing-xl);
-    }
+  .results-header {
+    background: white;
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
   }
 
-  h2 {
-    font-size: 1.25rem;
-    margin-bottom: var(--spacing-lg);
+  .results-header h1 {
+    color: var(--color-red);
+    margin: 0;
+    font-size: 1.5rem;
   }
 
-  .radio-group {
+  .results-intro {
+    font-size: 0.875rem;
+    color: var(--color-text);
+    margin: 0 0 var(--spacing-lg) 0;
+    padding: 0 var(--spacing-md);
+    line-height: 1.5;
+  }
+
+  .meals-list {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+    padding: 0 var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .meal-day-card {
+    background: white;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .day-header {
+    padding: var(--spacing-md);
+    background: white;
+  }
+
+  .day-name {
+    font-size: 1.25rem;
+    color: var(--color-green);
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .day-date {
+    font-size: 0.875rem;
+    color: var(--color-red);
+    font-weight: 500;
+    margin-left: var(--spacing-xs);
+  }
+
+  .meal-info {
+    padding: 0 var(--spacing-md) var(--spacing-md);
+  }
+
+  .meal-title {
+    font-size: 1rem;
+    color: var(--color-text);
+    margin: 0 0 var(--spacing-xs) 0;
+    font-weight: 500;
+  }
+
+  .meal-meta-inline {
+    font-size: 0.875rem;
+    color: var(--color-text-light);
+    display: block;
+  }
+
+  .meal-image-card {
+    width: 100%;
+    border: none;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    display: block;
+  }
+
+  .meal-image-card img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+  }
+
+  @media (min-width: 640px) {
+    .meal-image-card img {
+      height: 250px;
+    }
+  }
+
+  .save-plan-btn {
+    margin: 0 var(--spacing-md) var(--spacing-xl);
+    width: calc(100% - var(--spacing-md) * 2);
+  }
+
+  .plan-overlay {
+    width: 100%;
+    max-width: 500px;
+    margin: var(--spacing-lg) auto;
+  }
+
+  .plan-modal {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-title {
+    font-size: clamp(1.5rem, 5vw, 1.75rem);
+    color: var(--color-red);
+    margin-bottom: var(--spacing-lg);
+    text-align: center;
+  }
+
+  .pill-group {
+    display: flex;
+    gap: var(--spacing-xs);
+    background: var(--color-green-light);
+    padding: 4px;
+    border-radius: 100px;
     margin-bottom: var(--spacing-lg);
   }
 
-  .radio-option {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    cursor: pointer;
-    padding: var(--spacing-xs);
+  .pill-btn {
+    flex: 1;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: none;
+    border-radius: 100px;
+    font-weight: 500;
+    color: var(--color-text);
     min-height: var(--min-touch-target);
   }
 
-  .radio-option input {
-    width: 20px;
-    height: 20px;
+  .pill-btn.active {
+    background: var(--color-green);
+    color: white;
+  }
+
+  .days-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .day-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: var(--color-yellow);
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    font-weight: 500;
+    min-height: 50px;
     cursor: pointer;
-    flex-shrink: 0;
+  }
+
+  .day-row.selected {
+    background: var(--color-orange);
+    color: white;
+  }
+
+  .day-date {
+    font-size: 0.875rem;
+    opacity: 0.8;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+  }
+
+  .modal-actions button {
+    flex: 1;
+  }
+
+  .ingredient-suggestions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+    margin: var(--spacing-lg) 0;
+  }
+
+  .ingredient-chip {
+    background: var(--color-yellow);
+    border: none;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    font-size: 0.9375rem;
+    text-align: center;
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+  }
+
+  .selected-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .selected-chip {
+    background: var(--color-orange);
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: 100px;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .chip-remove {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0;
+    min-width: auto;
+    min-height: auto;
+  }
+
+  h2 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: var(--spacing-md);
+    line-height: 1.5;
   }
 
   .date-navigation {
@@ -478,16 +641,10 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--spacing-sm);
-    background: var(--color-bg-light);
+    background: transparent;
     border-radius: var(--border-radius);
     margin-bottom: var(--spacing-lg);
     gap: var(--spacing-xs);
-  }
-
-  @media (min-width: 640px) {
-    .date-navigation {
-      padding: var(--spacing-md);
-    }
   }
 
   .nav-btn {
@@ -509,106 +666,33 @@
     flex: 1;
   }
 
-  @media (min-width: 640px) {
-    .date-label {
-      font-size: 1rem;
-    }
-  }
-
-  .days-checkboxes {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
-  }
-
-  @media (min-width: 640px) {
-    .days-checkboxes {
-      gap: var(--spacing-md);
-    }
-  }
-
-  .checkbox-option {
+  .loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    cursor: pointer;
-    padding: var(--spacing-xs);
-    min-height: var(--min-touch-target);
+    justify-content: center;
+    z-index: 9999;
   }
 
-  .checkbox-option input {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    flex-shrink: 0;
+  .loading-content {
+    text-align: center;
+    padding: var(--spacing-xl);
   }
 
-  .hint {
-    font-size: 0.875rem;
-    color: var(--color-text-light);
-    margin: var(--spacing-md) 0;
-  }
-
-  .nutrition-toggle {
-    width: 100%;
-    margin-bottom: var(--spacing-md);
-  }
-
-  .nutrition-panel {
-    margin-bottom: var(--spacing-lg);
-    background: var(--color-bg-light);
-  }
-
-  .nutrition-panel h3 {
-    font-size: 1.125rem;
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .nutrition-note {
-    font-size: 0.875rem;
-    color: var(--color-text-light);
-    margin-bottom: var(--spacing-md);
-  }
-
-  .nutrition-stats {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-  }
-
-  .stat {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .stat-label {
-    color: var(--color-text-light);
-  }
-
-  .stat-value {
+  .loading-text {
+    font-size: clamp(2rem, 8vw, 3rem);
+    color: var(--color-red);
+    margin: 0;
     font-weight: 600;
+    line-height: 1.3;
   }
 
-  .meals-scroll {
-    display: flex;
-    gap: var(--spacing-md);
-    overflow-x: auto;
-    padding: var(--spacing-sm) 0;
-    margin-bottom: var(--spacing-lg);
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    /* Negative margin to extend to edges on mobile */
-    margin-left: calc(-1 * var(--spacing-md));
-    margin-right: calc(-1 * var(--spacing-md));
-    padding-left: var(--spacing-md);
-    padding-right: var(--spacing-md);
-  }
-
-  @media (min-width: 640px) {
-    .meals-scroll {
-      margin-left: 0;
-      margin-right: 0;
-    }
+  .green-p {
+    color: var(--color-green);
   }
 </style>

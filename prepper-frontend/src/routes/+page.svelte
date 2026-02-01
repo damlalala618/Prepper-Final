@@ -50,7 +50,7 @@
 
 <div class="home-page">
   <header class="header">
-    <h1 class="logo">Prepper</h1>
+    <h1 class="logo">🌶️ Prepper</h1>
     <div class="header-actions">
       <button class="icon-btn" aria-label="Search">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -99,6 +99,12 @@
       </button>
     </div>
 
+    <!-- Empty State Card -->
+    <div class="empty-state-card">
+      <div class="pepper-pattern"></div>
+      <p class="empty-text">Nothing planned yet.</p>
+    </div>
+
     <button class="info-card" on:click={() => showInfoModal = true}>
       <span>How does Prepper work?</span>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -119,10 +125,11 @@
               {#if favorite.image}
                 <img src={favorite.image} alt={favorite.name} />
               {:else}
-                <div class="placeholder-image"></div>
+                <div class="placeholder-image">
+                  <span class="placeholder-text">Recipe {favorite.id}<br/>IMAGE</span>
+                </div>
               {/if}
             </div>
-            <p class="favorite-name">{favorite.name}</p>
           </div>
         {/each}
       </div>
@@ -157,9 +164,10 @@
   }
 
   .logo {
-    font-size: clamp(1.25rem, 4vw, 1.5rem);
+    font-size: clamp(1.125rem, 4vw, 1.375rem);
     font-weight: 700;
     margin: 0;
+    color: var(--color-text);
   }
 
   .header-actions {
@@ -189,9 +197,9 @@
     display: flex;
     gap: var(--spacing-xs);
     margin: var(--spacing-lg) 0;
-    background: var(--color-bg-light);
+    background: var(--color-green-light);
     padding: 4px;
-    border-radius: var(--border-radius);
+    border-radius: 100px;
   }
 
   .toggle-btn {
@@ -199,14 +207,15 @@
     padding: var(--spacing-sm) var(--spacing-md);
     background: transparent;
     border: none;
-    border-radius: calc(var(--border-radius) - 2px);
+    border-radius: 100px;
     font-weight: 500;
-    color: var(--color-text-light);
+    color: var(--color-text);
+    min-height: var(--min-touch-target);
   }
 
   .toggle-btn.active {
-    background: white;
-    color: var(--color-text);
+    background: var(--color-green);
+    color: white;
     box-shadow: var(--shadow-sm);
   }
 
@@ -235,14 +244,14 @@
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    background: white;
-    border: 1px solid var(--color-border);
+    background: var(--color-yellow);
+    border: none;
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
     text-align: left;
     color: var(--color-text);
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     min-height: var(--min-touch-target);
     font-size: 0.9375rem;
   }
@@ -255,7 +264,41 @@
   }
 
   .info-card:hover {
-    background: var(--color-bg-light);
+    background: #f0d995;
+  }
+
+  .empty-state-card {
+    background: var(--color-pink);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg);
+    position: relative;
+    overflow: hidden;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pepper-pattern {
+    position: absolute;
+    inset: 0;
+    opacity: 0.3;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 35px,
+      rgba(200, 100, 100, 0.1) 35px,
+      rgba(200, 100, 100, 0.1) 70px
+    );
+  }
+
+  .empty-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 500;
+    color: var(--color-text);
+    font-size: 1rem;
   }
 
   .cta-button {
@@ -301,12 +344,23 @@
     border-radius: var(--border-radius);
     overflow: hidden;
     margin-bottom: var(--spacing-xs);
+    background: var(--color-yellow);
   }
 
   .placeholder-image {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%);
+    background: var(--color-yellow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .placeholder-text {
+    font-size: 0.75rem;
+    color: var(--color-text-light);
+    text-align: center;
+    line-height: 1.3;
   }
 
   .favorite-image img {

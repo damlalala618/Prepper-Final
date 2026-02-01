@@ -126,6 +126,7 @@
 
   h1 {
     font-size: clamp(1.25rem, 5vw, 1.75rem);
+    color: var(--color-red);
     margin: 0;
   }
 

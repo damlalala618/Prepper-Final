@@ -100,6 +100,7 @@
 
   .meal-info h3 {
     font-size: 1.25rem;
+    color: var(--color-red);
     margin-bottom: var(--spacing-xs);
   }
 

@@ -33,23 +33,24 @@
 
   .day-btn {
     padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-bg-light);
-    border: 1px solid var(--color-border);
+    background: var(--color-yellow);
+    border: none;
     border-radius: var(--border-radius);
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-text);
     white-space: nowrap;
     flex-shrink: 0;
+    min-height: var(--min-touch-target);
   }
 
   .day-btn:hover {
-    background: #e8e8e8;
+    background: var(--color-orange);
+    color: white;
   }
 
   .day-btn.active {
-    background: var(--color-primary);
+    background: var(--color-orange);
     color: white;
-    border-color: var(--color-primary);
   }
 </style>
