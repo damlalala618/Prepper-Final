@@ -71,8 +71,9 @@
   }
 
   .brand {
-    font-size: clamp(2.5rem, 10vw, 3.5rem);
-    font-weight: 700;
+    font-size: clamp(3rem, 12vw, 4.5rem);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
     color: var(--color-red);
     margin-bottom: var(--spacing-lg);
   }

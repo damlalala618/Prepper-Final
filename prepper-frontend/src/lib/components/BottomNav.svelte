@@ -80,14 +80,14 @@
   }
 
   .label {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 500;
     margin-top: 2px;
   }
 
   @media (min-width: 640px) {
     .label {
-      font-size: 0.875rem;
+      font-size: 1rem;
     }
   }
 </style>

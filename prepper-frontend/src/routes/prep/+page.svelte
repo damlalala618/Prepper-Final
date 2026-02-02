@@ -100,7 +100,7 @@
 
 <div class="prep-page">
   <div class="container">
-    <h1>Cook</h1>
+    <h1>Prep</h1>
 
     {#if !plan || !plan.meals || plan.meals.length === 0}
       <!-- Empty State -->
@@ -113,9 +113,30 @@
       </div>
     {:else}
       <!-- Plan exists -->
+      {#if days.length > 1}
+        <DaySelector 
+          {days} 
+          selectedDay={days[selectedDayIndex]}
+          onSelectDay={selectDay}
+        />
+      {/if}
+
+      <div class="date-display">{selectedMeal.date}</div>
+
       <div class="plan-summary card">
         <h2 class="recipe-title">{selectedMeal.mainDish.title}</h2>
-        <p class="sides-info">+ {selectedMeal.sides.length} sides</p>
+        
+        {#if selectedMeal.mainDish.image}
+          <img src="{selectedMeal.mainDish.image}" alt="{selectedMeal.mainDish.title}" class="recipe-image" />
+        {/if}
+
+        <div class="recipe-meta">
+          <span>{portions} portions</span>
+          <span>·</span>
+          <span>{selectedMeal.mainDish.calories} kcal</span>
+          <span>·</span>
+          <span>{selectedMeal.mainDish.prepMinutes + selectedMeal.mainDish.cookMinutes} min</span>
+        </div>
         
         <div class="portion-adjuster">
           <button 
@@ -125,7 +146,7 @@
           >
             −
           </button>
-          <span class="portion-display">{portions} portions</span>
+          <span class="portion-display">Adjust portions: {portions}</span>
           <button 
             class="portion-btn" 
             on:click={() => adjustPortions(1)}
@@ -136,16 +157,8 @@
         </div>
       </div>
 
-      {#if days.length > 1}
-        <DaySelector 
-          {days} 
-          selectedDay={days[selectedDayIndex]}
-          onSelectDay={selectDay}
-        />
-      {/if}
-
       <div class="steps-container">
-        <h2>Instructions</h2>
+        <h2>Recipe Instructions</h2>
         
         {#if selectedMeal.mainDish.ingredients && selectedMeal.mainDish.ingredients.length > 0}
           <div class="ingredients-summary card">
@@ -193,6 +206,35 @@
   h1 {
     padding-top: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+    color: var(--color-red);
+    font-size: clamp(1.5rem, 5vw, 1.875rem);
+  }
+
+  .date-display {
+    font-family: 'Otomanopee One', sans-serif;
+    font-size: 1.125rem;
+    color: var(--color-red);
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+  }
+
+  .recipe-image {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .recipe-meta {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    font-size: 0.875rem;
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-md);
   }
 
   .empty-state {
@@ -219,12 +261,6 @@
     font-size: clamp(1.5rem, 5vw, 1.75rem);
     color: var(--color-red);
     margin-bottom: var(--spacing-xs);
-  }
-
-  .sides-info {
-    font-size: 0.875rem;
-    color: var(--color-text-light);
-    margin-bottom: var(--spacing-lg);
   }
 
   .portion-adjuster {

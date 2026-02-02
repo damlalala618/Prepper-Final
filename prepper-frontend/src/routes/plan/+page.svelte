@@ -14,6 +14,7 @@
   let periodType = 'week';
   let selectedDays = [];
   let weekStart = getMonday(new Date());
+  let viewWeekStart = getMonday(new Date()); // For view mode navigation
   let currentIngredient = '';
   let selectedIngredients = [];
   let generatedMeals = [];
@@ -22,12 +23,42 @@
   let showNutrition = false;
   let selectedRecipe = null;
   let showRecipeModal = false;
+  let touchStartX = 0;
+  let touchEndX = 0;
+  let alternativeRecipes = {}; // Store alternative recipes for each meal
+
+  $: filteredMeals = getFilteredMeals($planStore, viewWeekStart);
+
+  function getFilteredMeals(plan, weekMonday) {
+    if (!plan || !plan.meals) return [];
+    const weekEnd = addDays(weekMonday, 6);
+    return plan.meals.filter(meal => {
+      const mealDate = parseMealDate(meal.date);
+      return mealDate >= weekMonday && mealDate <= weekEnd;
+    });
+  }
+
+  function parseMealDate(dateStr) {
+    const parts = dateStr.split(' ');
+    const monthMap = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1]);
+    const year = new Date().getFullYear();
+    return new Date(year, month, day);
+  }
+
+  function nextViewWeek() {
+    viewWeekStart = addDays(viewWeekStart, 7);
+  }
+
+  function prevViewWeek() {
+    viewWeekStart = addDays(viewWeekStart, -7);
+  }
 
   onMount(() => {
     // If there's a saved plan, show it in view mode
     if ($planStore && $planStore.meals && $planStore.meals.length > 0) {
       viewMode = 'view';
-      generatedMeals = $planStore.meals;
     } else {
       viewMode = 'view'; // Still show view mode with empty state
     }
@@ -218,6 +249,64 @@
     showRecipeModal = true;
   }
 
+  function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+  }
+
+  function handleTouchEnd(e, mealIndex) {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe(mealIndex);
+  }
+
+  function handleSwipe(mealIndex) {
+    const swipeThreshold = 50;
+    const diff = touchStartX - touchEndX;
+    
+    if (Math.abs(diff) > swipeThreshold) {
+      // Swipe detected - fetch alternative recipe
+      swapRecipe(mealIndex);
+    }
+  }
+
+  async function swapRecipe(mealIndex) {
+    try {
+      const currentMeal = filteredMeals[mealIndex];
+      
+      // Fetch alternative recipe
+      const response = await fetch(`${BACKEND_URL}/api/recipes/random?count=1`);
+      if (!response.ok) throw new Error('Failed to fetch alternative recipe');
+      
+      const data = await response.json();
+      if (data.recipes && data.recipes.length > 0) {
+        const newRecipe = data.recipes[0];
+        
+        // Update the meal in the plan store
+        const updatedMeals = $planStore.meals.map(meal => {
+          if (meal.dayName === currentMeal.dayName && meal.date === currentMeal.date) {
+            return {
+              ...meal,
+              mainDish: newRecipe
+            };
+          }
+          return meal;
+        });
+        
+        planStore.set({
+          ...$planStore,
+          meals: updatedMeals
+        });
+      }
+    } catch (error) {
+      console.error('Error swapping recipe:', error);
+    }
+  }
+
+  function adjustPlan() {
+    // Switch to create mode but preserve some settings
+    viewMode = 'create';
+    currentStep = 1;
+  }
+
   function handleViewIngredients() {
     showRecipeModal = false;
     goto('/ingredients');
@@ -276,20 +365,43 @@
     <!-- View Mode: Show saved plans or empty state -->
     <div class="container">
       <div class="results-header">
-        <h1>Prepper</h1>
+        <h1>Your Plans</h1>
       </div>
 
-      {#if generatedMeals.length > 0}
+      <div class="date-navigation">
+        <button class="nav-btn" on:click={prevViewWeek} aria-label="Previous week">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <span class="date-label">{getWeekRangeString(viewWeekStart)}</span>
+        <button class="nav-btn" on:click={nextViewWeek} aria-label="Next week">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+
+      {#if filteredMeals.length > 0}
         <p class="results-intro">
           Here's your plan! You can click on recipes to see more details.
         </p>
 
+        <div class="action-buttons">
+          <button class="btn-secondary" on:click={adjustPlan}>Adjust the Plan</button>
+          <button class="btn-secondary" on:click={startNewPlan}>Create New Plan</button>
+        </div>
+
         <div class="meals-list">
-          {#each generatedMeals as meal, i}
-            <div class="meal-day-card">
-              <div class="day-header">
-                <h3 class="day-name">{meal.dayName} <span class="day-date">{meal.date}</span></h3>
-              </div>
+          {#each filteredMeals as meal, i}
+            <div class="day-date-label">
+              <h3 class="day-name">{meal.dayName} <span class="day-date">{meal.date}</span></h3>
+            </div>
+            <div 
+              class="meal-day-card swipeable"
+              on:touchstart={handleTouchStart}
+              on:touchend={(e) => handleTouchEnd(e, i)}
+            >
               <div class="meal-info">
                 <h4 class="meal-title">{meal.mainDish.title}</h4>
                 <div class="meal-meta-inline">
@@ -309,21 +421,21 @@
           <div class="pepper-pattern"></div>
           <p class="empty-text">Nothing planned yet.</p>
         </div>
+        
+        <button class="btn-primary save-plan-btn" on:click={startNewPlan}>
+          Create New Plan
+        </button>
       {/if}
-
-      <button class="btn-primary save-plan-btn" on:click={startNewPlan}>
-        Create New Plan
-      </button>
     </div>
   {:else if viewMode === 'create' && currentStep === 3}
     <!-- Step 3: Results - Full Page View -->
     <div class="container">
       <div class="results-header">
-        <h1>Prepper</h1>
+        <h1>Your Plans</h1>
       </div>
       
       <p class="results-intro">
-        Here's your plan! You can swipe to change recipe, click on it to see more. You can also adjust the plan and when you like it, save it.
+        Here's your plan! Click on recipes to see more details. You can also adjust the plan and when you like it, save it.
       </p>
 
       <div class="meals-list">
@@ -531,15 +643,49 @@
   .results-header h1 {
     color: var(--color-red);
     margin: 0;
-    font-size: 1.5rem;
+    font-size: clamp(1.5rem, 5vw, 1.875rem);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
   }
 
   .results-intro {
     font-size: 0.875rem;
     color: var(--color-text);
-    margin: 0 0 var(--spacing-lg) 0;
+    margin: 0 0 var(--spacing-md) 0;
     padding: 0 var(--spacing-md);
     line-height: 1.5;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: 0 var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .action-buttons button {
+    flex: 1;
+  }
+
+  .day-date-label {
+    padding: 0 var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .day-date-label .day-name {
+    font-size: 1.25rem;
+    color: var(--color-green);
+    margin: 0;
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+  }
+
+  .day-date-label .day-date {
+    font-size: 0.875rem;
+    color: var(--color-red);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+    margin-left: var(--spacing-xs);
   }
 
   .meals-list {
@@ -555,29 +701,21 @@
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
+    position: relative;
+    transition: transform 0.2s ease;
   }
 
-  .day-header {
-    padding: var(--spacing-md);
-    background: white;
+  .meal-day-card.swipeable {
+    touch-action: pan-y;
+    cursor: grab;
   }
 
-  .day-name {
-    font-size: 1.25rem;
-    color: var(--color-green);
-    margin: 0;
-    font-weight: 600;
-  }
-
-  .day-date {
-    font-size: 0.875rem;
-    color: var(--color-red);
-    font-weight: 500;
-    margin-left: var(--spacing-xs);
+  .meal-day-card.swipeable:active {
+    cursor: grabbing;
   }
 
   .meal-info {
-    padding: 0 var(--spacing-md) var(--spacing-md);
+    padding: var(--spacing-md);
   }
 
   .meal-title {

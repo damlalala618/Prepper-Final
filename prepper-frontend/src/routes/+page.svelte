@@ -4,6 +4,7 @@
   import InfoModal from '$lib/components/InfoModal.svelte';
   import RecipeModal from '$lib/components/RecipeModal.svelte';
   import { planStore } from '$lib/stores/plan';
+  import { markedRecipes } from '$lib/stores/markedRecipes';
   import { getMonday, getWeekRangeString, formatLongDate, addDays, getDayName } from '$lib/utils/date';
 
   const BACKEND_URL = 'http://localhost:4000';
@@ -33,8 +34,12 @@
         return mealDateStr === todayStr;
       });
     } else {
-      // For week view, show all meals in the plan
-      return plan.meals;
+      // For week view, show meals that fall within the selected week
+      const weekEnd = addDays(weekMonday, 6);
+      return plan.meals.filter(meal => {
+        const mealDate = parseMealDate(meal.date);
+        return mealDate >= weekMonday && mealDate <= weekEnd;
+      });
     }
   }
 
@@ -67,11 +72,7 @@
         if (res.ok) {
           const data = await res.json();
           if (data.recipe) {
-            favs.push({
-              id: data.recipe.id,
-              name: data.recipe.title,
-              image: data.recipe.image
-            });
+            favs.push(data.recipe);
           }
         }
       }
@@ -114,7 +115,7 @@
 
 <div class="home-page">
   <header class="header">
-    <h1 class="logo">🌶️ Prepper</h1>
+    <h1 class="logo">🌶️ P<span class="green-r">r</span>epper</h1>
     <div class="header-actions">
       <button class="icon-btn" aria-label="Search" on:click={() => goto('/search')}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -122,7 +123,7 @@
           <path d="m21 21-4.35-4.35"/>
         </svg>
       </button>
-      <button class="icon-btn" aria-label="Profile">
+      <button class="icon-btn" aria-label="Profile" on:click={() => goto('/profile')}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
@@ -223,16 +224,27 @@
         {:else if favorites.length > 0}
           {#each favorites as favorite}
             <div class="favorite-card">
-              <div class="favorite-image">
-                {#if favorite.image}
-                  <img src={favorite.image} alt={favorite.name} />
-                {:else}
-                  <div class="placeholder-image">
-                    <span class="placeholder-text">No Image</span>
-                  </div>
-                {/if}
-              </div>
-              <p class="favorite-name">{favorite.name}</p>
+              <button class="favorite-card-btn" on:click={() => viewRecipe(favorite)}>
+                <div class="favorite-image">
+                  {#if favorite.image}
+                    <img src={favorite.image} alt={favorite.title} />
+                  {:else}
+                    <div class="placeholder-image">
+                      <span class="placeholder-text">No Image</span>
+                    </div>
+                  {/if}
+                </div>
+                <p class="favorite-name">{favorite.title}</p>
+              </button>
+              <button 
+                class="star-btn-favorite" 
+                on:click={() => markedRecipes.toggle(favorite)}
+                aria-label={markedRecipes.isMarked($markedRecipes, favorite.id) ? 'Unmark recipe' : 'Mark recipe'}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill={markedRecipes.isMarked($markedRecipes, favorite.id) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
             </div>
           {/each}
         {:else}
@@ -273,10 +285,15 @@
   }
 
   .logo {
-    font-size: clamp(1.125rem, 4vw, 1.375rem);
-    font-weight: 700;
+    font-size: clamp(1.5rem, 5vw, 1.875rem);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
     margin: 0;
-    color: var(--color-text);
+    color: #C33C44;
+  }
+
+  .green-r {
+    color: #7CB342;
   }
 
   .header-actions {
@@ -443,14 +460,6 @@
     transform: translateY(-2px);
   }
 
-  .meal-day-label {
-    background: var(--color-red);
-    color: white;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-weight: 600;
-    font-size: 0.9375rem;
-  }
-
   .meal-plan-image {
     width: 100%;
     height: 200px;
@@ -539,12 +548,43 @@
     flex-shrink: 0;
     width: 120px;
     scroll-snap-align: start;
+    position: relative;
   }
 
   @media (min-width: 640px) {
     .favorite-card {
       width: 140px;
     }
+  }
+
+  .favorite-card-btn {
+    width: 100%;
+    border: none;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .star-btn-favorite {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    background: none;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-orange);
+    cursor: pointer;
+    z-index: 1;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+
+  .star-btn-favorite:hover {
+    transform: scale(1.15);
   }
 
   .favorite-image {

@@ -1,6 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import RecipeModal from '$lib/components/RecipeModal.svelte';
+  import { markedRecipes } from '$lib/stores/markedRecipes';
 
   const BACKEND_URL = 'http://localhost:4000';
 
@@ -75,7 +76,6 @@
         placeholder="Search by ingredient or recipe name..."
         bind:value={searchQuery}
         on:keypress={handleKeyPress}
-        autofocus
       />
       {#if searchQuery}
         <button class="clear-btn" on:click={() => { searchQuery = ''; searchResults = []; hasSearched = false; }}>
@@ -102,29 +102,40 @@
           <p class="results-count">{searchResults.length} recipe{searchResults.length !== 1 ? 's' : ''} found</p>
           <div class="results-grid">
             {#each searchResults as recipe}
-              <button class="recipe-card" on:click={() => viewRecipe(recipe)}>
-                <div class="recipe-image">
-                  {#if recipe.image}
-                    <img src={recipe.image} alt={recipe.title} />
-                  {:else}
-                    <div class="placeholder-image">
-                      <span>No Image</span>
-                    </div>
-                  {/if}
-                </div>
-                <div class="recipe-info">
-                  <h3 class="recipe-title">{recipe.title}</h3>
-                  <div class="recipe-meta">
-                    {#if recipe.calories}
-                      <span>{recipe.calories} kcal</span>
-                    {/if}
-                    {#if recipe.prepMinutes && recipe.cookMinutes}
-                      <span>·</span>
-                      <span>{recipe.prepMinutes + recipe.cookMinutes} min</span>
+              <div class="recipe-card">
+                <button class="recipe-card-btn" on:click={() => viewRecipe(recipe)}>
+                  <div class="recipe-image">
+                    {#if recipe.image}
+                      <img src={recipe.image} alt={recipe.title} />
+                    {:else}
+                      <div class="placeholder-image">
+                        <span>No Image</span>
+                      </div>
                     {/if}
                   </div>
-                </div>
-              </button>
+                  <div class="recipe-info">
+                    <h3 class="recipe-title">{recipe.title}</h3>
+                    <div class="recipe-meta">
+                      {#if recipe.calories}
+                        <span>{recipe.calories} kcal</span>
+                      {/if}
+                      {#if recipe.prepMinutes && recipe.cookMinutes}
+                        <span>·</span>
+                        <span>{recipe.prepMinutes + recipe.cookMinutes} min</span>
+                      {/if}
+                    </div>
+                  </div>
+                </button>
+                <button 
+                  class="star-btn-overlay" 
+                  on:click={() => markedRecipes.toggle(recipe)}
+                  aria-label={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'Unmark recipe' : 'Mark recipe'}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                </button>
+              </div>
             {/each}
           </div>
         </div>
@@ -307,17 +318,45 @@
     background: white;
     border-radius: var(--border-radius);
     overflow: hidden;
-    border: none;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
   }
 
   .recipe-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+  }
+
+  .recipe-card-btn {
+    width: 100%;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    display: block;
+  }
+
+  .star-btn-overlay {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    background: none;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-orange);
+    cursor: pointer;
+    z-index: 1;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+
+  .star-btn-overlay:hover {
+    transform: scale(1.15);
   }
 
   .recipe-image {
