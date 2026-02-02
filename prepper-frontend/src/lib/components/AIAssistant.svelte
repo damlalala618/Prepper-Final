@@ -114,7 +114,7 @@
 
 {#if show}
   <div class="ai-overlay" on:click={close} role="presentation">
-    <div class="ai-modal" role="dialog" aria-modal="true">
+    <div class="ai-modal" on:click|stopPropagation role="dialog" aria-modal="true">
       <div class="ai-header">
         <div class="ai-header-content">
           <div class="ai-icon">🌶️</div>

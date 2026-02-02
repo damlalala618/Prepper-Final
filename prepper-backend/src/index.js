@@ -188,23 +188,34 @@ ${context.preferences.vegetarian ? '- Vegetarian\n' : ''}${context.preferences.v
     }
 
     // Use OpenAI GPT for real AI responses
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
-    });
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      });
 
-    const response = completion.choices[0].message.content;
-    
-    res.json({ 
-      response,
-      timestamp: new Date().toISOString(),
-      mode: 'ai'
-    });
+      const response = completion.choices[0].message.content;
+      
+      res.json({ 
+        response,
+        timestamp: new Date().toISOString(),
+        mode: 'ai'
+      });
+    } catch (aiError) {
+      // If OpenAI fails (quota, rate limit, etc.), fall back to demo mode
+      console.log('OpenAI error, using demo mode:', aiError.message);
+      const response = generateAssistantResponse(message, systemPrompt, context);
+      res.json({ 
+        response,
+        timestamp: new Date().toISOString(),
+        mode: 'demo'
+      });
+    }
   } catch (error) {
     console.error('AI chat error:', error);
     res.status(500).json({ error: 'AI service temporarily unavailable' });

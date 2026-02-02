@@ -5,18 +5,39 @@
   import BottomNav from '$lib/components/BottomNav.svelte';
   import AIAssistant from '$lib/components/AIAssistant.svelte';
   import ProfileSetup from '$lib/components/ProfileSetup.svelte';
-  import { getItem } from '$lib/utils/storage';
+  import { getItem, getSessionItem } from '$lib/utils/storage';
 
   let showAI = false;
   let showProfileSetup = false;
+  let splashDismissed = false;
 
   onMount(() => {
-    // Check if user profile exists
+    // Check if splash screen has been dismissed
+    const dismissed = getSessionItem('prepper_splash_dismissed', false);
+    splashDismissed = dismissed;
+
+    // If splash is already dismissed, check for profile immediately
+    if (dismissed) {
+      checkProfile();
+    } else {
+      // Wait for splash to be dismissed, then check profile
+      const checkInterval = setInterval(() => {
+        const nowDismissed = getSessionItem('prepper_splash_dismissed', false);
+        if (nowDismissed) {
+          splashDismissed = true;
+          clearInterval(checkInterval);
+          checkProfile();
+        }
+      }, 100);
+    }
+  });
+
+  function checkProfile() {
     const profile = getItem('user_profile');
     if (!profile) {
       showProfileSetup = true;
     }
-  });
+  }
 
   function toggleAI() {
     showAI = !showAI;
