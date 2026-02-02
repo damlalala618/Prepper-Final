@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import InfoModal from '$lib/components/InfoModal.svelte';
+  import RecipeModal from '$lib/components/RecipeModal.svelte';
+  import { planStore } from '$lib/stores/plan';
   import { getMonday, getWeekRangeString, formatLongDate, addDays, getDayName } from '$lib/utils/date';
 
   const BACKEND_URL = 'http://localhost:4000';
@@ -12,10 +14,44 @@
   let monday = getMonday(currentDate);
   let favorites = [];
   let loadingFavorites = true;
+  let selectedRecipe = null;
+  let showRecipeModal = false;
 
   $: dateDisplay = viewMode === 'today' 
     ? formatLongDate(currentDate)
     : getWeekRangeString(monday);
+
+  $: displayedMeals = getDisplayedMeals($planStore, viewMode, currentDate, monday);
+
+  function getDisplayedMeals(plan, mode, todayDate, weekMonday) {
+    if (!plan || !plan.meals) return [];
+    
+    if (mode === 'today') {
+      const todayStr = formatLongDate(todayDate);
+      return plan.meals.filter(meal => {
+        const mealDateStr = formatLongDate(parseMealDate(meal.date));
+        return mealDateStr === todayStr;
+      });
+    } else {
+      // For week view, show all meals in the plan
+      return plan.meals;
+    }
+  }
+
+  function parseMealDate(dateStr) {
+    // dateStr format is like "Feb 3" or "Jan 27"
+    const parts = dateStr.split(' ');
+    const monthMap = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1]);
+    const year = new Date().getFullYear();
+    return new Date(year, month, day);
+  }
+
+  function viewRecipe(recipe) {
+    selectedRecipe = recipe;
+    showRecipeModal = true;
+  }
 
   onMount(async () => {
     await loadFavorites();
@@ -66,6 +102,9 @@
 
   function setViewMode(mode) {
     viewMode = mode;
+    if (mode === 'today') {
+      currentDate = new Date();
+    }
   }
 </script>
 
@@ -124,11 +163,41 @@
       </button>
     </div>
 
-    <!-- Empty State Card -->
-    <div class="empty-state-card">
-      <div class="pepper-pattern"></div>
-      <p class="empty-text">Nothing planned yet.</p>
-    </div>
+    <!-- Meal Plan Display -->
+    {#if displayedMeals.length > 0}
+      {#if viewMode === 'today'}
+        <div class="meal-plan-container">
+          {#each displayedMeals as meal}
+            <button class="meal-plan-card" on:click={() => viewRecipe(meal.mainDish)}>
+              {#if meal.mainDish.image}
+                <div class="meal-plan-image">
+                  <img src={meal.mainDish.image} alt={meal.mainDish.title} />
+                </div>
+              {/if}
+              <div class="meal-plan-info">
+                <h3 class="meal-plan-title">{meal.mainDish.title}</h3>
+              </div>
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <!-- Week View: Compact List -->
+        <div class="week-plan-container">
+          {#each displayedMeals as meal}
+            <button class="week-plan-row" on:click={() => viewRecipe(meal.mainDish)}>
+              <span class="week-day-name">{meal.dayName}</span>
+              <span class="week-recipe-name">{meal.mainDish.title}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    {:else}
+      <!-- Empty State Card -->
+      <div class="empty-state-card">
+        <div class="pepper-pattern"></div>
+        <p class="empty-text">Nothing planned yet.</p>
+      </div>
+    {/if}
 
     <button class="info-card" on:click={() => showInfoModal = true}>
       <span>How does Prepper work?</span>
@@ -151,7 +220,7 @@
               <p class="favorite-name loading-shimmer-text">Loading...</p>
             </div>
           {/each}
-        {:else}
+        {:else if favorites.length > 0}
           {#each favorites as favorite}
             <div class="favorite-card">
               <div class="favorite-image">
@@ -166,6 +235,8 @@
               <p class="favorite-name">{favorite.name}</p>
             </div>
           {/each}
+        {:else}
+          <p class="empty-favorites">Unable to load favorites. Please check your connection.</p>
         {/if}
       </div>
     </section>
@@ -173,6 +244,9 @@
 </div>
 
 <InfoModal bind:show={showInfoModal} />
+{#if selectedRecipe}
+  <RecipeModal recipe={selectedRecipe} bind:show={showRecipeModal} />
+{/if}
 
 <style>
   .home-page {
@@ -231,7 +305,7 @@
   .view-toggle {
     display: flex;
     gap: var(--spacing-xs);
-    margin: var(--spacing-lg) 0;
+    margin: var(--spacing-sm) 0 var(--spacing-sm) 0;
     background: var(--color-green-light);
     padding: 4px;
     border-radius: 100px;
@@ -258,8 +332,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-md) 0;
-    margin-bottom: var(--spacing-lg);
+    padding: 0;
+    margin-bottom: var(--spacing-sm);
   }
 
   .nav-btn {
@@ -347,6 +421,106 @@
     }
   }
 
+  .meal-plan-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .meal-plan-card {
+    background: var(--color-pink);
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.2s;
+  }
+
+  .meal-plan-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .meal-day-label {
+    background: var(--color-red);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-weight: 600;
+    font-size: 0.9375rem;
+  }
+
+  .meal-plan-image {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+  }
+
+  .meal-plan-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .meal-plan-info {
+    padding: var(--spacing-md);
+  }
+
+  .meal-plan-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .week-plan-container {
+    background: var(--color-pink);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .week-plan-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .week-plan-row:last-child {
+    border-bottom: none;
+  }
+
+  .week-plan-row:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .week-day-name {
+    font-weight: 600;
+    color: var(--color-red);
+    font-size: 0.9375rem;
+    min-width: 100px;
+  }
+
+  .week-recipe-name {
+    font-size: 0.9375rem;
+    color: var(--color-text);
+    flex: 1;
+    text-align: right;
+  }
+
+  .favorites-section {
+    margin-bottom: var(--spacing-xl);
+  }
+
   .favorites-section h2 {
     font-size: clamp(1.125rem, 4vw, 1.5rem);
     margin-bottom: var(--spacing-md);
@@ -380,6 +554,7 @@
     overflow: hidden;
     margin-bottom: var(--spacing-xs);
     background: var(--color-yellow);
+    border: 2px solid var(--color-border);
   }
 
   .placeholder-image {
@@ -413,6 +588,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .empty-favorites {
+    color: var(--color-text-light);
+    font-size: 0.875rem;
+    padding: var(--spacing-md);
   }
 
   .loading-shimmer {

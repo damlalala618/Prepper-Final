@@ -9,11 +9,13 @@
 
   const BACKEND_URL = 'http://localhost:4000';
 
+  let viewMode = 'view'; // 'view' or 'create'
   let currentStep = 1;
   let periodType = 'week';
   let selectedDays = [];
   let weekStart = getMonday(new Date());
-  let fridgeContents = '';
+  let currentIngredient = '';
+  let selectedIngredients = [];
   let generatedMeals = [];
   let loading = false;
   let showLoadingScreen = false;
@@ -21,8 +23,34 @@
   let selectedRecipe = null;
   let showRecipeModal = false;
 
+  onMount(() => {
+    // If there's a saved plan, show it in view mode
+    if ($planStore && $planStore.meals && $planStore.meals.length > 0) {
+      viewMode = 'view';
+      generatedMeals = $planStore.meals;
+    } else {
+      viewMode = 'view'; // Still show view mode with empty state
+    }
+  });
+
+  function startNewPlan() {
+    viewMode = 'create';
+    currentStep = 1;
+    generatedMeals = [];
+    selectedIngredients = [];
+    selectedDays = [];
+  }
+
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const mockSides = ['Steamed Rice', 'Garden Salad', 'Roasted Vegetables', 'Garlic Bread', 'Quinoa', 'Mashed Potatoes'];
+
+  function isPastDate(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    return compareDate < today;
+  }
 
   function nextWeek() {
     weekStart = addDays(weekStart, 7);
@@ -33,6 +61,13 @@
   }
 
   function toggleDay(day) {
+    const dayIndex = dayNames.indexOf(day);
+    const dayDate = addDays(weekStart, dayIndex);
+    
+    if (isPastDate(dayDate)) {
+      return; // Don't allow selecting past dates
+    }
+    
     if (selectedDays.includes(day)) {
       selectedDays = selectedDays.filter(d => d !== day);
     } else {
@@ -51,6 +86,31 @@
     currentStep = step;
   }
 
+  function addIngredient() {
+    const ingredient = currentIngredient.trim();
+    if (ingredient && !selectedIngredients.includes(ingredient)) {
+      selectedIngredients = [...selectedIngredients, ingredient];
+      currentIngredient = '';
+    }
+  }
+
+  function removeIngredient(ingredient) {
+    selectedIngredients = selectedIngredients.filter(i => i !== ingredient);
+  }
+
+  function addSuggestedIngredient(ingredient) {
+    if (!selectedIngredients.includes(ingredient)) {
+      selectedIngredients = [...selectedIngredients, ingredient];
+    }
+  }
+
+  function handleKeyPress(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addIngredient();
+    }
+  }
+
   async function generatePlan() {
     loading = true;
     showLoadingScreen = true;
@@ -63,32 +123,44 @@
         : selectedDays.sort((a, b) => dayNames.indexOf(a) - dayNames.indexOf(b));
 
       const meals = [];
-      
-      // Extract keywords from fridge contents
-      const keywords = fridgeContents.trim().split(/[,\s]+/).filter(k => k.length > 2);
-      const searchQuery = keywords.length > 0 ? keywords[0] : 'chicken';
-
-      // Fetch recipes
       let recipes = [];
       
-      // Try to fetch from search
-      try {
-        const searchRes = await fetch(`${BACKEND_URL}/api/recipes/search?q=${encodeURIComponent(searchQuery)}`);
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          recipes = searchData.recipes || [];
+      // Fetch recipes for each selected ingredient to ensure coverage
+      if (selectedIngredients.length > 0) {
+        for (const ingredient of selectedIngredients) {
+          try {
+            const searchRes = await fetch(`${BACKEND_URL}/api/recipes/search?q=${encodeURIComponent(ingredient)}`);
+            if (searchRes.ok) {
+              const searchData = await searchRes.json();
+              if (searchData.recipes && searchData.recipes.length > 0) {
+                // Add recipes from this ingredient search
+                recipes.push(...searchData.recipes);
+              }
+            }
+          } catch (err) {
+            console.error(`Search failed for ${ingredient}:`, err);
+          }
         }
-      } catch (err) {
-        console.error('Search failed:', err);
+        
+        // Remove duplicates by recipe ID
+        const uniqueRecipes = [];
+        const seenIds = new Set();
+        for (const recipe of recipes) {
+          if (!seenIds.has(recipe.id)) {
+            seenIds.add(recipe.id);
+            uniqueRecipes.push(recipe);
+          }
+        }
+        recipes = uniqueRecipes;
       }
 
-      // Fill with random recipes if needed
+      // Fill with random recipes if we don't have enough
       while (recipes.length < daysToGenerate.length) {
         try {
           const randomRes = await fetch(`${BACKEND_URL}/api/recipes/random`);
           if (randomRes.ok) {
             const randomData = await randomRes.json();
-            if (randomData.recipe) {
+            if (randomData.recipe && !recipes.some(r => r.id === randomData.recipe.id)) {
               recipes.push(randomData.recipe);
             }
           }
@@ -183,7 +255,8 @@
       meals: generatedMeals,
       createdAt: new Date().toISOString()
     });
-    goto('/prep');
+    viewMode = 'view';
+    currentStep = 1;
   }
 </script>
 
@@ -191,7 +264,7 @@
   <title>Plan - Prepper</title>
 </svelte:head>
 
-<div class="plan-page" class:is-modal={currentStep < 3} class:is-results={currentStep === 3}>
+<div class="plan-page" class:is-modal={viewMode === 'create' && currentStep < 3} class:is-results={viewMode === 'view' || currentStep === 3}>
   {#if showLoadingScreen}
     <!-- Loading Screen -->
     <div class="loading-screen">
@@ -199,7 +272,50 @@
         <h1 class="loading-text"><span class="green-p">P</span>repping<br/>your plan...</h1>
       </div>
     </div>
-  {:else if currentStep === 3}
+  {:else if viewMode === 'view'}
+    <!-- View Mode: Show saved plans or empty state -->
+    <div class="container">
+      <div class="results-header">
+        <h1>Prepper</h1>
+      </div>
+
+      {#if generatedMeals.length > 0}
+        <p class="results-intro">
+          Here's your plan! You can click on recipes to see more details.
+        </p>
+
+        <div class="meals-list">
+          {#each generatedMeals as meal, i}
+            <div class="meal-day-card">
+              <div class="day-header">
+                <h3 class="day-name">{meal.dayName} <span class="day-date">{meal.date}</span></h3>
+              </div>
+              <div class="meal-info">
+                <h4 class="meal-title">{meal.mainDish.title}</h4>
+                <div class="meal-meta-inline">
+                  {meal.portions} portions · {meal.mainDish.calories} kcal · {meal.mainDish.prepMinutes + meal.mainDish.cookMinutes} min
+                </div>
+              </div>
+              {#if meal.mainDish.image}
+                <button class="meal-image-card" on:click={() => viewRecipe(meal.mainDish)}>
+                  <img src={meal.mainDish.image} alt={meal.mainDish.title} />
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="empty-state-card">
+          <div class="pepper-pattern"></div>
+          <p class="empty-text">Nothing planned yet.</p>
+        </div>
+      {/if}
+
+      <button class="btn-primary save-plan-btn" on:click={startNewPlan}>
+        Create New Plan
+      </button>
+    </div>
+  {:else if viewMode === 'create' && currentStep === 3}
     <!-- Step 3: Results - Full Page View -->
     <div class="container">
       <div class="results-header">
@@ -235,7 +351,7 @@
         Save This Plan
       </button>
     </div>
-  {:else}
+  {:else if viewMode === 'create'}
   <div class="plan-overlay">
     <div class="plan-modal">
       <h1 class="modal-title">Plan Your Meals</h1>
@@ -280,6 +396,8 @@
                 <button
                   class="day-row"
                   class:selected={selectedDays.includes(day)}
+                  class:disabled={isPastDate(addDays(weekStart, i))}
+                  disabled={isPastDate(addDays(weekStart, i))}
                   on:click={() => toggleDay(day)}
                 >
                   <span>{day}</span>
@@ -305,35 +423,46 @@
       <div class="step-content">
         <h2>What do you already have in handy?<br/>Or do you have ingredients in mind?</h2>
 
-        <textarea 
-          class="input-field"
-          placeholder="Type ingredients here"
-          bind:value={fridgeContents}
-        ></textarea>
+        <div class="ingredient-input-group">
+          <input
+            type="text"
+            class="input-field ingredient-input"
+            placeholder="Type one ingredient"
+            bind:value={currentIngredient}
+            on:keypress={handleKeyPress}
+          />
+          <button 
+            class="btn-add" 
+            on:click={addIngredient}
+            disabled={!currentIngredient.trim()}
+          >
+            Add
+          </button>
+        </div>
 
         <div class="ingredient-suggestions">
-          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Pasta' : 'Pasta'}>
+          <button class="ingredient-chip" on:click={() => addSuggestedIngredient('Pasta')}>
             🍝 Pasta
           </button>
-          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Eggs' : 'Eggs'}>
+          <button class="ingredient-chip" on:click={() => addSuggestedIngredient('Eggs')}>
             🥚 Eggs
           </button>
-          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Potato' : 'Potato'}>
+          <button class="ingredient-chip" on:click={() => addSuggestedIngredient('Potato')}>
             🥔 Potato
           </button>
-          <button class="ingredient-chip" on:click={() => fridgeContents = fridgeContents ? fridgeContents + ', Meat' : 'Meat'}>
+          <button class="ingredient-chip" on:click={() => addSuggestedIngredient('Meat')}>
             🥩 Meat
           </button>
         </div>
 
-        {#if fridgeContents}
+        {#if selectedIngredients.length > 0}
           <div class="selected-chips">
-            {#each fridgeContents.split(',').map(i => i.trim()).filter(i => i) as ingredient}
+            {#each selectedIngredients as ingredient}
               <span class="selected-chip">
                 {ingredient}
                 <button 
                   class="chip-remove" 
-                  on:click={() => fridgeContents = fridgeContents.split(',').map(i => i.trim()).filter(i => i !== ingredient).join(', ')}
+                  on:click={() => removeIngredient(ingredient)}
                 >
                   ✕
                 </button>
@@ -491,6 +620,40 @@
     width: calc(100% - var(--spacing-md) * 2);
   }
 
+  .empty-state-card {
+    background: var(--color-pink);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg);
+    position: relative;
+    overflow: hidden;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pepper-pattern {
+    position: absolute;
+    inset: 0;
+    opacity: 0.3;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 35px,
+      rgba(200, 100, 100, 0.1) 35px,
+      rgba(200, 100, 100, 0.1) 70px
+    );
+  }
+
+  .empty-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 500;
+    color: var(--color-text);
+    font-size: 1rem;
+  }
+
   .plan-overlay {
     width: 100%;
     max-width: 500px;
@@ -517,7 +680,7 @@
     background: var(--color-green-light);
     padding: 4px;
     border-radius: 100px;
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
   }
 
   .pill-btn {
@@ -547,19 +710,24 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: var(--color-yellow);
     border: none;
     border-radius: var(--border-radius);
     font-size: 1rem;
     font-weight: 500;
-    min-height: 50px;
+    min-height: 40px;
     cursor: pointer;
   }
 
   .day-row.selected {
     background: var(--color-orange);
     color: white;
+  }
+
+  .day-row.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .day-date {
@@ -575,6 +743,50 @@
 
   .modal-actions button {
     flex: 1;
+  }
+
+  .ingredient-input-group {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .ingredient-input {
+    flex: 1;
+    min-height: var(--min-touch-target);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    background: white;
+  }
+
+  .ingredient-input:focus {
+    outline: none;
+    border-color: var(--color-green);
+  }
+
+  .btn-add {
+    background: var(--color-green);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 0 var(--spacing-lg);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    min-height: var(--min-touch-target);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .btn-add:hover:not(:disabled) {
+    background: var(--color-green-dark);
+  }
+
+  .btn-add:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .ingredient-suggestions {
@@ -640,7 +852,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-sm);
+    padding: 0 var(--spacing-sm);
     background: transparent;
     border-radius: var(--border-radius);
     margin-bottom: var(--spacing-lg);
@@ -657,6 +869,12 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 
   .date-label {
