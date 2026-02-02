@@ -8,11 +8,17 @@
     "dev": "node src/index.js",
     "start": "node src/index.js"
   },
-  "keywords": ["meal-prep", "recipes", "api"],
+  "keywords": [
+    "meal-prep",
+    "recipes",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "openai": "^6.17.0"
   }
 }

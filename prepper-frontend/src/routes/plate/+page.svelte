@@ -30,7 +30,7 @@
 
 <div class="plate-page">
   <div class="container">
-    <h1>Store & Reheat</h1>
+    <h1>Plate</h1>
 
     {#if !plan || !plan.meals || plan.meals.length === 0}
       <!-- Empty State -->
@@ -76,6 +76,10 @@
   h1 {
     padding-top: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+    color: var(--color-red);
+    font-size: clamp(1.5rem, 5vw, 1.875rem);
   }
 
   .empty-state {

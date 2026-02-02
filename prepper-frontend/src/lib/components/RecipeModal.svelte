@@ -1,4 +1,5 @@
 <script>
+  import { goto } from '$app/navigation';
   import { markedRecipes } from '$lib/stores/markedRecipes';
 
   export let recipe = null;
@@ -78,8 +79,12 @@
   function handleViewIngredients() {
     if (onViewIngredients) {
       onViewIngredients();
+    } else {
+      // Default behavior: navigate to prep page
+      goto('/prep');
     }
   }
+
 </script>
 
 {#if show && recipe}
@@ -172,12 +177,6 @@
             </div>
           {/if}
         </div>
-
-        {#if onViewIngredients}
-          <button class="btn-primary" on:click={handleViewIngredients}>
-            Start Prepping
-          </button>
-        {/if}
       </div>
     </div>
   </div>

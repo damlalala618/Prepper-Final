@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { planningPreferences } from '$lib/stores/preferences';
   import { planStore } from '$lib/stores/plan';
+  import { markedRecipes } from '$lib/stores/markedRecipes';
   import { getMonday, getWeekRangeString, addDays, getDayName, formatShortDate } from '$lib/utils/date';
   import MealCard from '$lib/components/MealCard.svelte';
   import RecipeModal from '$lib/components/RecipeModal.svelte';
@@ -26,6 +27,13 @@
   let touchStartX = 0;
   let touchEndX = 0;
   let alternativeRecipes = {}; // Store alternative recipes for each meal
+  let showAdjustOverlay = false;
+  let adjustableMeals = [];
+  let draggedIndex = null;
+  let dragOverIndex = null;
+  let showOptionsMenu = false;
+  let optionsMenuMealIndex = null;
+  let replacingMealIndex = null; // Track which meal is being replaced
 
   $: filteredMeals = getFilteredMeals($planStore, viewWeekStart);
 
@@ -56,9 +64,17 @@
   }
 
   onMount(() => {
+    // Check for create parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const shouldCreate = urlParams.get('create') === 'true';
+
     // If there's a saved plan, show it in view mode
-    if ($planStore && $planStore.meals && $planStore.meals.length > 0) {
+    if ($planStore && $planStore.meals && $planStore.meals.length > 0 && !shouldCreate) {
       viewMode = 'view';
+    } else if (shouldCreate) {
+      // Start creating a new plan if create parameter is present
+      viewMode = 'create';
+      currentStep = 1;
     } else {
       viewMode = 'view'; // Still show view mode with empty state
     }
@@ -70,6 +86,13 @@
     generatedMeals = [];
     selectedIngredients = [];
     selectedDays = [];
+  }
+
+  function deletePlan() {
+    if (confirm('Are you sure you want to delete your plan? This action cannot be undone.')) {
+      planStore.clear();
+      viewMode = 'view';
+    }
   }
 
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -233,8 +256,15 @@
         await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
       
+      // Automatically save the generated plan
+      planStore.set({
+        meals: meals,
+        createdAt: new Date().toISOString()
+      });
+      
       showLoadingScreen = false;
-      currentStep = 3;
+      viewMode = 'view';
+      currentStep = 1;
     } catch (error) {
       console.error('Error generating plan:', error);
       showLoadingScreen = false;
@@ -302,9 +332,78 @@
   }
 
   function adjustPlan() {
-    // Switch to create mode but preserve some settings
-    viewMode = 'create';
-    currentStep = 1;
+    // Open overlay with current week's meals
+    adjustableMeals = [...filteredMeals];
+    showAdjustOverlay = true;
+  }
+
+  function closeAdjustOverlay() {
+    showAdjustOverlay = false;
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
+
+  function saveAdjustedPlan() {
+    // Update the plan store with reordered meals
+    const updatedMeals = $planStore.meals.map(meal => {
+      const adjustedMeal = adjustableMeals.find(m => m.date === meal.date && m.dayName === meal.dayName);
+      return adjustedMeal || meal;
+    });
+    
+    planStore.set({
+      ...$planStore,
+      meals: updatedMeals
+    });
+    
+    closeAdjustOverlay();
+  }
+
+  function handleDragStart(e, index) {
+    draggedIndex = index;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, index) {
+    e.preventDefault();
+    dragOverIndex = index;
+  }
+
+  function handleDrop(e, index) {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      // Swap only the recipes, keep days and dates fixed
+      const newMeals = [...adjustableMeals];
+      const draggedRecipe = newMeals[draggedIndex].mainDish;
+      const targetRecipe = newMeals[index].mainDish;
+      const draggedSides = newMeals[draggedIndex].sides;
+      const targetSides = newMeals[index].sides;
+      const draggedPortions = newMeals[draggedIndex].portions;
+      const targetPortions = newMeals[index].portions;
+      
+      // Swap only the recipe content, not dates/days
+      newMeals[draggedIndex] = {
+        ...newMeals[draggedIndex],
+        mainDish: targetRecipe,
+        sides: targetSides,
+        portions: targetPortions
+      };
+      
+      newMeals[index] = {
+        ...newMeals[index],
+        mainDish: draggedRecipe,
+        sides: draggedSides,
+        portions: draggedPortions
+      };
+      
+      adjustableMeals = newMeals;
+    }
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
+
+  function handleDragEnd() {
+    draggedIndex = null;
+    dragOverIndex = null;
   }
 
   function handleViewIngredients() {
@@ -339,13 +438,40 @@
     }
   }
 
-  function savePlan() {
-    planStore.set({
-      meals: generatedMeals,
-      createdAt: new Date().toISOString()
-    });
-    viewMode = 'view';
-    currentStep = 1;
+  function openOptionsMenu(index) {
+    showOptionsMenu = true;
+    optionsMenuMealIndex = index;
+  }
+
+  function closeOptionsMenu() {
+    showOptionsMenu = false;
+    optionsMenuMealIndex = null;
+  }
+
+  function markRecipe() {
+    if (optionsMenuMealIndex !== null) {
+      const meal = filteredMeals[optionsMenuMealIndex];
+      markedRecipes.toggle(meal.mainDish);
+      closeOptionsMenu();
+    }
+  }
+
+  function findAnotherRecipe() {
+    if (optionsMenuMealIndex !== null) {
+      const selectedMeal = filteredMeals[optionsMenuMealIndex];
+      // Find the actual index in the full plan
+      const actualIndex = $planStore?.meals?.findIndex(m => 
+        m.date === selectedMeal.date && m.dayName === selectedMeal.dayName
+      );
+      
+      if (actualIndex !== undefined && actualIndex >= 0) {
+        sessionStorage.setItem('replacingMealIndex', actualIndex.toString());
+      }
+      
+      closeOptionsMenu();
+      // Navigate to search page with replacement context
+      goto('/search?replacing=true');
+    }
   }
 </script>
 
@@ -358,7 +484,7 @@
     <!-- Loading Screen -->
     <div class="loading-screen">
       <div class="loading-content">
-        <h1 class="loading-text"><span class="green-p">P</span>repping<br/>your plan...</h1>
+        <h1 class="loading-text">P<span class="green-r">r</span>epping<br/>your plan...</h1>
       </div>
     </div>
   {:else if viewMode === 'view'}
@@ -387,11 +513,6 @@
           Here's your plan! You can click on recipes to see more details.
         </p>
 
-        <div class="action-buttons">
-          <button class="btn-secondary" on:click={adjustPlan}>Adjust the Plan</button>
-          <button class="btn-secondary" on:click={startNewPlan}>Create New Plan</button>
-        </div>
-
         <div class="meals-list">
           {#each filteredMeals as meal, i}
             <div class="day-date-label">
@@ -403,7 +524,16 @@
               on:touchend={(e) => handleTouchEnd(e, i)}
             >
               <div class="meal-info">
-                <h4 class="meal-title">{meal.mainDish.title}</h4>
+                <div class="meal-title-row">
+                  <h4 class="meal-title">{meal.mainDish.title}</h4>
+                  <button class="options-btn" on:click={() => openOptionsMenu(i)} aria-label="Recipe options">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="5" r="2"/>
+                      <circle cx="12" cy="12" r="2"/>
+                      <circle cx="12" cy="19" r="2"/>
+                    </svg>
+                  </button>
+                </div>
                 <div class="meal-meta-inline">
                   {meal.portions} portions · {meal.mainDish.calories} kcal · {meal.mainDish.prepMinutes + meal.mainDish.cookMinutes} min
                 </div>
@@ -415,6 +545,16 @@
               {/if}
             </div>
           {/each}
+        </div>
+
+        <div class="bottom-action-buttons">
+          <button class="btn-icon" on:click={adjustPlan} aria-label="Adjust the plan">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="btn-delete" on:click={deletePlan}>Delete the Plan</button>
         </div>
       {:else}
         <div class="empty-state-card">
@@ -458,10 +598,6 @@
           </div>
         {/each}
       </div>
-
-      <button class="btn-primary save-plan-btn" on:click={savePlan}>
-        Save This Plan
-      </button>
     </div>
   {:else if viewMode === 'create'}
   <div class="plan-overlay">
@@ -608,6 +744,76 @@
   onViewIngredients={handleViewIngredients}
 />
 
+{#if showAdjustOverlay}
+  <div class="adjust-overlay" on:click={closeAdjustOverlay} role="presentation">
+    <div class="adjust-modal" role="dialog" aria-modal="true">
+      <div class="adjust-header">
+        <h2>Adjust Your Plan</h2>
+        <button class="close-btn" on:click={closeAdjustOverlay} aria-label="Close">×</button>
+      </div>
+      
+      <p class="adjust-intro">Drag and drop recipes to rearrange your week</p>
+      
+      <div class="adjust-meals-list">
+        {#each adjustableMeals as meal, i}
+          <div class="adjust-meal-wrapper">
+            <div class="adjust-day-date">{meal.dayName} {meal.date}</div>
+            <div 
+              class="adjust-meal-item"
+              class:dragging={draggedIndex === i}
+              class:drag-over={dragOverIndex === i}
+              draggable="true"
+              role="button"
+              tabindex="0"
+              on:dragstart={(e) => handleDragStart(e, i)}
+              on:dragover={(e) => handleDragOver(e, i)}
+              on:drop={(e) => handleDrop(e, i)}
+              on:dragend={handleDragEnd}
+            >
+              <div class="drag-handle">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="9" cy="5" r="1.5"/>
+                  <circle cx="9" cy="12" r="1.5"/>
+                  <circle cx="9" cy="19" r="1.5"/>
+                  <circle cx="15" cy="5" r="1.5"/>
+                  <circle cx="15" cy="12" r="1.5"/>
+                  <circle cx="15" cy="19" r="1.5"/>
+                </svg>
+              </div>
+              <div class="adjust-recipe">{meal.mainDish.title}</div>
+            </div>
+          </div>
+        {/each}
+      </div>
+      
+      <div class="adjust-actions">
+        <button class="btn-secondary" on:click={closeAdjustOverlay}>Cancel</button>
+        <button class="btn-primary" on:click={saveAdjustedPlan}>Save Changes</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showOptionsMenu}
+  <div class="options-overlay" on:click={closeOptionsMenu} role="presentation">
+    <div class="options-menu" role="dialog" aria-modal="true">
+      <button class="option-item" on:click={markRecipe}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+        Mark the recipe
+      </button>
+      <button class="option-item" on:click={findAnotherRecipe}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+        Find another recipe
+      </button>
+    </div>
+  </div>
+{/if}
+
 <style>
   .plan-page {
     min-height: 100vh;
@@ -630,7 +836,6 @@
 
   .plan-page.is-results {
     background: var(--color-bg-secondary);
-    padding-bottom: calc(var(--bottom-nav-height) + var(--spacing-md));
   }
 
   .results-header {
@@ -656,15 +861,50 @@
     line-height: 1.5;
   }
 
-  .action-buttons {
+  .bottom-action-buttons {
     display: flex;
     gap: var(--spacing-sm);
-    padding: 0 var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    padding: 0 var(--spacing-md) var(--bottom-nav-height) var(--spacing-md);
   }
 
-  .action-buttons button {
+  .btn-icon {
+    background: transparent;
+    color: var(--color-green);
+    border: 2px solid var(--color-green);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    min-height: 40px;
+    width: 56px;
+    flex-shrink: 0;
+  }
+
+  .btn-icon:hover {
+    background: var(--color-green);
+    color: white;
+  }
+
+  .btn-delete {
+    background: transparent;
+    color: var(--color-red);
+    border: 2px solid var(--color-red);
+    border-radius: var(--border-radius);
+    padding: 0 var(--spacing-lg);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    min-height: 40px;
     flex: 1;
+  }
+
+  .btn-delete:hover {
+    background: var(--color-red);
+    color: white;
   }
 
   .day-date-label {
@@ -674,7 +914,7 @@
 
   .day-date-label .day-name {
     font-size: 1.25rem;
-    color: var(--color-green);
+    color: var(--color-red);
     margin: 0;
     font-family: 'Otomanopee One', sans-serif;
     font-weight: 400;
@@ -682,7 +922,27 @@
 
   .day-date-label .day-date {
     font-size: 0.875rem;
+    color: var(--color-green);
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+    margin-left: var(--spacing-xs);
+  }
+
+  .day-header {
+    padding: var(--spacing-md) var(--spacing-md) 0;
+  }
+
+  .day-header .day-name {
+    font-size: 1.25rem;
     color: var(--color-red);
+    margin: 0 0 var(--spacing-xs) 0;
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
+  }
+
+  .day-header .day-date {
+    font-size: 0.875rem;
+    color: var(--color-green);
     font-family: 'Otomanopee One', sans-serif;
     font-weight: 400;
     margin-left: var(--spacing-xs);
@@ -718,11 +978,39 @@
     padding: var(--spacing-md);
   }
 
+  .meal-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+  }
+
   .meal-title {
     font-size: 1rem;
     color: var(--color-text);
-    margin: 0 0 var(--spacing-xs) 0;
+    margin: 0;
     font-weight: 500;
+    flex: 1;
+  }
+
+  .options-btn {
+    background: none;
+    border: none;
+    padding: var(--spacing-xs);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-light);
+    border-radius: 50%;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .options-btn:hover {
+    background: var(--color-bg-light);
+    color: var(--color-text);
   }
 
   .meal-meta-inline {
@@ -806,6 +1094,8 @@
   }
 
   .modal-title {
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
     font-size: clamp(1.5rem, 5vw, 1.75rem);
     color: var(--color-red);
     margin-bottom: var(--spacing-lg);
@@ -869,6 +1159,7 @@
   }
 
   .day-date {
+    font-family: 'Otomanopee One', sans-serif;
     font-size: 0.875rem;
     opacity: 0.8;
   }
@@ -1041,14 +1332,196 @@
   }
 
   .loading-text {
+    font-family: 'Otomanopee One', sans-serif;
     font-size: clamp(2rem, 8vw, 3rem);
     color: var(--color-red);
     margin: 0;
-    font-weight: 600;
+    font-weight: 400;
     line-height: 1.3;
   }
 
-  .green-p {
+  .green-r {
     color: var(--color-green);
   }
-</style>
+
+  /* Adjust Plan Overlay Styles */
+  .adjust-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--spacing-md);
+  }
+
+  .adjust-modal {
+    background: white;
+    border-radius: var(--border-radius);
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .adjust-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .adjust-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--color-red);
+    font-family: 'Otomanopee One', sans-serif;
+  }
+
+  .adjust-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--color-text-light);
+    cursor: pointer;
+    padding: 0;
+    min-width: var(--min-touch-target);
+    min-height: var(--min-touch-target);
+  }
+
+  .adjust-intro {
+    padding: var(--spacing-md) var(--spacing-lg);
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-light);
+    text-align: center;
+  }
+
+  .adjust-meals-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .adjust-meal-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .adjust-day-date {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    font-family: 'Otomanopee One', sans-serif;
+  }
+
+  .adjust-meal-item {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: white;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    cursor: move;
+    transition: all 0.2s;
+  }
+
+  .adjust-meal-item:hover {
+    border-color: var(--color-green);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .adjust-meal-item.dragging {
+    opacity: 0.5;
+  }
+
+  .adjust-meal-item.drag-over {
+    border-color: var(--color-orange);
+    background: var(--color-bg-light);
+  }
+
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    color: var(--color-text-light);
+    flex-shrink: 0;
+  }
+
+  .adjust-recipe {
+    font-size: 0.875rem;
+    color: var(--color-text);
+    flex: 1;
+  }
+
+  .adjust-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .adjust-actions button {
+    flex: 1;
+  }
+
+  /* Options Menu Styles */
+  .options-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--spacing-md);
+  }
+
+  .options-menu {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-sm);
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .option-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: none;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.9375rem;
+    color: var(--color-text);
+    transition: background 0.2s;
+    text-align: left;
+  }
+
+  .option-item:hover {
+    background: var(--color-bg-light);
+  }
+
+  .option-item svg {
+    flex-shrink: 0;
+    color: var(--color-text-light);
+  }</style>

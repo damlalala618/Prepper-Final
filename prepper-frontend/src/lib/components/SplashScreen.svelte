@@ -34,7 +34,7 @@
     aria-label="Dismiss splash screen"
   >
     <div class="content">
-      <h1 class="brand">Prepper</h1>
+      <h1 class="brand">P<span class="green-r">r</span>epper</h1>
       <p class="tagline-main">Plan. Prep. Plate.</p>
       <p class="tagline-sub">Meal Prepping made simple</p>
       <p class="hint">Tap anywhere to continue</p>
@@ -76,6 +76,10 @@
     font-weight: 400;
     color: var(--color-red);
     margin-bottom: var(--spacing-lg);
+  }
+
+  .green-r {
+    color: var(--color-green);
   }
 
   @media (min-width: 640px) {

@@ -107,6 +107,23 @@
       currentDate = new Date();
     }
   }
+
+  function handleStartPlanning() {
+    // Check if there's a plan for the current week
+    const weekEnd = addDays(monday, 6);
+    const hasWeekPlan = $planStore?.meals?.some(meal => {
+      const mealDate = parseMealDate(meal.date);
+      return mealDate >= monday && mealDate <= weekEnd;
+    });
+
+    if (hasWeekPlan) {
+      // Navigate to plan page to view existing plan
+      goto('/plan');
+    } else {
+      // Navigate with create flag to start new plan
+      goto('/plan?create=true');
+    }
+  }
 </script>
 
 <svelte:head>
@@ -207,7 +224,7 @@
       </svg>
     </button>
 
-    <button class="btn-primary cta-button" on:click={() => goto('/plan')}>
+    <button class="btn-primary cta-button" on:click={handleStartPlanning}>
       Start Planning
     </button>
 
@@ -494,7 +511,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: transparent;
     border: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
@@ -502,6 +519,7 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.2s;
+    min-height: 44px;
   }
 
   .week-plan-row:last-child {
@@ -513,10 +531,13 @@
   }
 
   .week-day-name {
+    font-family: 'Otomanopee One', sans-serif;
     font-weight: 600;
-    color: var(--color-red);
+    color: black;
     font-size: 0.9375rem;
     min-width: 100px;
+    flex-shrink: 0;
+    letter-spacing: 0.05em;
   }
 
   .week-recipe-name {
@@ -524,6 +545,10 @@
     color: var(--color-text);
     flex: 1;
     text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: var(--spacing-sm);
   }
 
   .favorites-section {

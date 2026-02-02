@@ -7,8 +7,6 @@
   let plan = null;
   let selectedDayIndex = 0;
   let portions = 2;
-  let activeStepIndex = 0;
-  let observer;
 
   $: if ($planStore) {
     plan = $planStore;
@@ -28,7 +26,6 @@
     const index = days.indexOf(day);
     if (index !== -1) {
       selectedDayIndex = index;
-      activeStepIndex = 0;
     }
   }
 
@@ -53,44 +50,6 @@
     }
     
     return amount;
-  }
-
-  onMount(() => {
-    // Set up IntersectionObserver for active step detection
-    observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = parseInt(entry.target.dataset.stepIndex);
-            activeStepIndex = index;
-          }
-        });
-      },
-      {
-        threshold: 0.5,
-        rootMargin: '-100px 0px -100px 0px'
-      }
-    );
-
-    return () => {
-      if (observer) {
-        observer.disconnect();
-      }
-    };
-  });
-
-  function setupObserver(node, index) {
-    node.dataset.stepIndex = index;
-    if (observer) {
-      observer.observe(node);
-    }
-    return {
-      destroy() {
-        if (observer) {
-          observer.unobserve(node);
-        }
-      }
-    };
   }
 </script>
 
@@ -178,19 +137,26 @@
 
         <div class="steps-list">
           {#each selectedMeal.mainDish.steps as step, i}
-            <div 
-              class="step-item" 
-              class:active={i === activeStepIndex}
-              class:completed={i < activeStepIndex}
-              class:upcoming={i > activeStepIndex}
-              use:setupObserver={i}
-            >
-              <div class="step-number">{i + 1}</div>
+            <div class="step-wrapper">
+              <div class="step-header">
+                <div class="step-divider-line"></div>
+                <span class="step-title">Step {i + 1} of {selectedMeal.mainDish.steps.length}</span>
+                <div class="step-divider-line"></div>
+              </div>
               <div class="step-content">
                 <p>{step}</p>
               </div>
             </div>
           {/each}
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn-back" on:click={() => goto('/plan')}>
+            Back
+          </button>
+          <button class="btn-finished" on:click={() => goto('/plan')}>
+            Finished!
+          </button>
         </div>
       </div>
     {/if}
@@ -348,83 +314,114 @@
   .steps-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-xl);
     padding-bottom: var(--spacing-xl);
   }
 
-  .step-item {
+  .step-wrapper {
     display: flex;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md);
-    background: white;
-    border-radius: var(--border-radius);
-    border: 2px solid transparent;
-    transition: all 0.3s ease;
+    flex-direction: column;
+    gap: var(--spacing-md);
   }
 
-  @media (min-width: 640px) {
-    .step-item {
-      gap: var(--spacing-md);
-      padding: var(--spacing-lg);
-    }
-  }
-
-  .step-item.active {
-    opacity: 1;
-    border-color: var(--color-orange);
-    box-shadow: var(--shadow-md);
-  }
-
-  .step-item.upcoming {
-    opacity: 0.6;
-    filter: blur(0.5px);
-  }
-
-  .step-item.completed {
-    opacity: 0.8;
-  }
-
-  .step-number {
-    flex-shrink: 0;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    background: var(--color-bg-light);
-    border: 2px solid var(--color-border);
+  .step-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-weight: 600;
+    gap: var(--spacing-sm);
+    width: 100%;
+  }
+
+  .step-divider-line {
+    flex: 1;
+    height: 2px;
+    background: var(--color-orange);
+  }
+
+  .step-title {
+    font-family: 'Otomanopee One', sans-serif;
+    font-size: 1rem;
     color: var(--color-text);
-    font-size: 0.875rem;
+    white-space: nowrap;
+    padding: 0 var(--spacing-sm);
   }
 
   @media (min-width: 640px) {
-    .step-number {
-      width: 2.5rem;
-      height: 2.5rem;
-      font-size: 1rem;
+    .step-title {
+      font-size: 1.125rem;
     }
-  }
-
-  .step-item.active .step-number {
-    background: var(--color-orange);
-    color: white;
-    border-color: var(--color-orange);
   }
 
   .step-content {
-    flex: 1;
+    padding: var(--spacing-md);
+    background: white;
+    border-radius: var(--border-radius);
+  }
+
+  @media (min-width: 640px) {
+    .step-content {
+      padding: var(--spacing-lg);
+    }
   }
 
   .step-content p {
     line-height: 1.6;
     font-size: 0.9375rem;
+    margin: 0;
   }
 
   @media (min-width: 640px) {
     .step-content p {
       font-size: 1rem;
+    }
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+    margin-top: var(--spacing-lg);
+    padding-bottom: var(--spacing-xl);
+  }
+
+  .btn-back,
+  .btn-finished {
+    padding: var(--spacing-sm) var(--spacing-xl);
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+  }
+
+  .btn-back {
+    background: white;
+    color: var(--color-red);
+    border: 2px solid var(--color-red);
+  }
+
+  .btn-back:hover {
+    background: var(--color-red);
+    color: white;
+  }
+
+  .btn-finished {
+    background: var(--color-green);
+    color: white;
+    border: 2px solid var(--color-green);
+  }
+
+  .btn-finished:hover {
+    background: #6fa138;
+    border-color: #6fa138;
+  }
+
+  @media (min-width: 640px) {
+    .btn-back,
+    .btn-finished {
+      padding: var(--spacing-md) var(--spacing-xl);
+      font-size: 1.125rem;
+      min-width: 140px;
     }
   }
 </style>

@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 import { getItem, setItem } from '../utils/storage';
 
 function createMarkedRecipesStore() {
-  const { subscribe, set, update } = writable<any[]>([]);
+  const { subscribe, set, update } = writable([]);
 
   // Load from localStorage on initialization
   if (typeof window !== 'undefined') {
@@ -14,7 +14,7 @@ function createMarkedRecipesStore() {
 
   return {
     subscribe,
-    toggle: (recipe: any) => {
+    toggle: (recipe) => {
       update(recipes => {
         const index = recipes.findIndex(r => r.id === recipe.id);
         let newRecipes;
@@ -33,8 +33,14 @@ function createMarkedRecipesStore() {
         return newRecipes;
       });
     },
-    isMarked: (recipes: any[], recipeId: string) => {
+    isMarked: (recipes, recipeId) => {
       return recipes.some(r => r.id === recipeId);
+    },
+    clear: () => {
+      set([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('marked_recipes');
+      }
     }
   };
 }

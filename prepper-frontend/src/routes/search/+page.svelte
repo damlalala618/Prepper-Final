@@ -1,5 +1,8 @@
 <script>
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { planStore } from '$lib/stores/plan';
   import RecipeModal from '$lib/components/RecipeModal.svelte';
   import { markedRecipes } from '$lib/stores/markedRecipes';
 
@@ -11,6 +14,14 @@
   let hasSearched = false;
   let selectedRecipe = null;
   let showRecipeModal = false;
+  let isReplacementMode = false;
+  let selectedForReplacement = null;
+
+  onMount(() => {
+    // Check if we're in replacement mode
+    const urlParams = new URLSearchParams(window.location.search);
+    isReplacementMode = urlParams.get('replacing') === 'true';
+  });
 
   async function handleSearch() {
     if (!searchQuery.trim()) return;
@@ -41,12 +52,54 @@
   }
 
   function viewRecipe(recipe) {
-    selectedRecipe = recipe;
-    showRecipeModal = true;
+    if (isReplacementMode) {
+      selectedForReplacement = recipe;
+    } else {
+      selectedRecipe = recipe;
+      showRecipeModal = true;
+    }
+  }
+
+  function addToPlan() {
+    if (!selectedForReplacement) return;
+
+    // Get the meal index from sessionStorage
+    const mealIndexStr = sessionStorage.getItem('replacingMealIndex');
+    if (mealIndexStr === null) {
+      goto('/plan');
+      return;
+    }
+
+    const mealIndex = parseInt(mealIndexStr);
+    planStore.update(plan => {
+      if (plan && plan.meals && plan.meals[mealIndex]) {
+        const updatedMeals = [...plan.meals];
+        updatedMeals[mealIndex] = {
+          ...updatedMeals[mealIndex],
+          mainDish: selectedForReplacement
+        };
+        return { ...plan, meals: updatedMeals };
+      }
+      return plan;
+    });
+
+    // Clear session storage and navigate back
+    sessionStorage.removeItem('replacingMealIndex');
+    goto('/plan');
+  }
+
+  function cancelReplacement() {
+    sessionStorage.removeItem('replacingMealIndex');
+    selectedForReplacement = null;
+    goto('/plan');
   }
 
   function goBack() {
-    goto('/');
+    if (isReplacementMode) {
+      cancelReplacement();
+    } else {
+      goto('/');
+    }
   }
 </script>
 
@@ -102,7 +155,7 @@
           <p class="results-count">{searchResults.length} recipe{searchResults.length !== 1 ? 's' : ''} found</p>
           <div class="results-grid">
             {#each searchResults as recipe}
-              <div class="recipe-card">
+              <div class="recipe-card" class:selected={isReplacementMode && selectedForReplacement?.id === recipe.id}>
                 <button class="recipe-card-btn" on:click={() => viewRecipe(recipe)}>
                   <div class="recipe-image">
                     {#if recipe.image}
@@ -126,15 +179,17 @@
                     </div>
                   </div>
                 </button>
-                <button 
-                  class="star-btn-overlay" 
-                  on:click={() => markedRecipes.toggle(recipe)}
-                  aria-label={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'Unmark recipe' : 'Mark recipe'}
-                >
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                </button>
+                {#if !isReplacementMode}
+                  <button 
+                    class="star-btn-overlay" 
+                    on:click={() => markedRecipes.toggle(recipe)}
+                    aria-label={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'Unmark recipe' : 'Mark recipe'}
+                  >
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill={markedRecipes.isMarked($markedRecipes, recipe.id) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                  </button>
+                {/if}
               </div>
             {/each}
           </div>
@@ -175,6 +230,17 @@
       </div>
     {/if}
   </div>
+
+  {#if isReplacementMode && selectedForReplacement}
+    <div class="replacement-footer">
+      <div class="replacement-info">
+        <p class="replacement-text">Selected: <strong>{selectedForReplacement.title}</strong></p>
+      </div>
+      <button class="btn-primary" on:click={addToPlan}>
+        Add it to the Plan
+      </button>
+    </div>
+  {/if}
 </div>
 
 <RecipeModal 
@@ -214,6 +280,8 @@
   }
 
   .search-header h1 {
+    font-family: 'Otomanopee One', sans-serif;
+    font-weight: 400;
     color: var(--color-red);
     margin: 0;
     font-size: 1.5rem;
@@ -319,12 +387,18 @@
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
     position: relative;
+    border: 2px solid transparent;
   }
 
   .recipe-card:hover {
     transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .recipe-card.selected {
+    border-color: var(--color-green);
     box-shadow: var(--shadow-md);
   }
 
@@ -469,4 +543,30 @@
     background: var(--color-orange);
     color: white;
   }
-</style>
+
+  /* Replacement Mode Styles */
+  .replacement-footer {
+    position: fixed;
+    bottom: calc(var(--bottom-nav-height));
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid var(--color-border);
+    padding: var(--spacing-md);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+  }
+
+  .replacement-info {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .replacement-text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text);
+  }
+
+  .replacement-text strong {
+    color: var(--color-green);
+  }</style>
