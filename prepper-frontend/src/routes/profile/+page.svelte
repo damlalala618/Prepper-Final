@@ -95,20 +95,24 @@
   }
 
   function logout() {
+    console.log('Logout clicked');
     if (confirm('Are you sure you want to log out? This will clear all your data.')) {
-      // Clear stores first
+      console.log('Logout confirmed, clearing data...');
+      
+      // Clear all user data from localStorage and sessionStorage first
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      
+      // Clear stores
       planStore.clear();
       markedRecipes.clear();
       
-      // Clear all user data from localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user_profile');
-        localStorage.removeItem('user_preferences');
-        localStorage.removeItem('avoid_ingredients');
-      }
+      console.log('Data cleared, reloading...');
       
-      // Reload the page to show profile setup
-      window.location.reload();
+      // Reload the page to show splash screen and profile setup
+      window.location.href = '/';
     }
   }
 </script>
