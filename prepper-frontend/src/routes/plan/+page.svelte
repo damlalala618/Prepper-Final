@@ -34,6 +34,7 @@
   let showOptionsMenu = false;
   let optionsMenuMealIndex = null;
   let replacingMealIndex = null; // Track which meal is being replaced
+  let showDeleteConfirm = false;
 
   $: filteredMeals = getFilteredMeals($planStore, viewWeekStart);
 
@@ -88,11 +89,25 @@
     selectedDays = [];
   }
 
-  function deletePlan() {
-    if (confirm('Are you sure you want to delete your plan? This action cannot be undone.')) {
-      planStore.clear();
-      viewMode = 'view';
+  function showDeleteConfirmation() {
+    showDeleteConfirm = true;
+  }
+
+  function cancelDelete() {
+    showDeleteConfirm = false;
+  }
+
+  function confirmDelete() {
+    // Clear the plan from the store
+    planStore.clear();
+    
+    // Double-check localStorage is cleared
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('prepper_plan');
     }
+    
+    viewMode = 'view';
+    showDeleteConfirm = false;
   }
 
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -554,7 +569,7 @@
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
           </button>
-          <button class="btn-delete" on:click={deletePlan}>Delete the Plan</button>
+          <button class="btn-delete" on:click={showDeleteConfirmation}>Delete the Plan</button>
         </div>
       {:else}
         <div class="empty-state-card">
@@ -810,6 +825,20 @@
         </svg>
         Find another recipe
       </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Delete Confirmation Modal -->
+{#if showDeleteConfirm}
+  <div class="confirm-overlay" on:click={cancelDelete} role="presentation">
+    <div class="confirm-modal" on:click|stopPropagation role="dialog" aria-modal="true">
+      <h2 class="confirm-title">Delete Plan?</h2>
+      <p class="confirm-message">Are you sure you want to delete your plan? This action cannot be undone.</p>
+      <div class="confirm-actions">
+        <button class="btn-cancel" on:click={cancelDelete}>Cancel</button>
+        <button class="btn-confirm-delete" on:click={confirmDelete}>Delete</button>
+      </div>
     </div>
   </div>
 {/if}
@@ -1524,4 +1553,78 @@
   .option-item svg {
     flex-shrink: 0;
     color: var(--color-text-light);
+  }
+
+  /* Confirmation Modal */
+  .confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: var(--spacing-md);
+  }
+
+  .confirm-modal {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .confirm-title {
+    font-family: 'Otomanopee One', sans-serif;
+    font-size: 1.5rem;
+    color: var(--color-red);
+    margin: 0 0 var(--spacing-md) 0;
+  }
+
+  .confirm-message {
+    color: var(--color-text);
+    margin: 0 0 var(--spacing-xl) 0;
+    line-height: 1.5;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+  }
+
+  .btn-cancel {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-bg-light);
+    border: none;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel:hover {
+    background: #e0e0e0;
+  }
+
+  .btn-confirm-delete {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-red);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-confirm-delete:hover {
+    background: #a32e34;
   }</style>

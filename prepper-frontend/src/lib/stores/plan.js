@@ -28,7 +28,9 @@ function createPlanStore() {
     },
     clear: () => {
       set(null);
-      setItem('prepper_plan', null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('prepper_plan');
+      }
     }
   };
 }

@@ -19,6 +19,7 @@
   let showEditModal = false;
   let editName = '';
   let editPreferences = {};
+  let showLogoutConfirm = false;
 
   // Load saved data
   if (typeof window !== 'undefined') {
@@ -94,26 +95,27 @@
     markedRecipes.toggle(recipe);
   }
 
-  function logout() {
-    console.log('Logout clicked');
-    if (confirm('Are you sure you want to log out? This will clear all your data.')) {
-      console.log('Logout confirmed, clearing data...');
-      
-      // Clear all user data from localStorage and sessionStorage first
-      if (typeof window !== 'undefined') {
-        localStorage.clear();
-        sessionStorage.clear();
-      }
-      
-      // Clear stores
-      planStore.clear();
-      markedRecipes.clear();
-      
-      console.log('Data cleared, reloading...');
-      
-      // Reload the page to show splash screen and profile setup
-      window.location.href = '/';
+  function showLogoutConfirmation() {
+    showLogoutConfirm = true;
+  }
+
+  function cancelLogout() {
+    showLogoutConfirm = false;
+  }
+
+  function confirmLogout() {
+    // Clear all user data from localStorage and sessionStorage first
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
     }
+    
+    // Clear stores
+    planStore.clear();
+    markedRecipes.clear();
+    
+    // Reload the page to show splash screen and profile setup
+    window.location.href = '/';
   }
 </script>
 
@@ -276,7 +278,7 @@
 
     <!-- Logout Section -->
     <section class="logout-section">
-      <button class="btn-logout" on:click={logout}>
+      <button class="btn-logout" on:click={showLogoutConfirmation}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
           <polyline points="16 17 21 12 16 7"/>
@@ -370,6 +372,20 @@
       <div class="edit-footer">
         <button class="btn-cancel" on:click={closeEditModal}>Cancel</button>
         <button class="btn-save" on:click={saveProfileEdit}>Save Changes</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Logout Confirmation Modal -->
+{#if showLogoutConfirm}
+  <div class="confirm-overlay" on:click={cancelLogout} role="presentation">
+    <div class="confirm-modal" on:click|stopPropagation role="dialog" aria-modal="true">
+      <h2 class="confirm-title">Log Out?</h2>
+      <p class="confirm-message">Are you sure you want to log out? This will clear all your data.</p>
+      <div class="confirm-actions">
+        <button class="btn-cancel-logout" on:click={cancelLogout}>Cancel</button>
+        <button class="btn-confirm-logout" on:click={confirmLogout}>Log Out</button>
       </div>
     </div>
   </div>
@@ -869,4 +885,77 @@
   .btn-save:hover {
     background: #b33339;
   }
-</style>
+
+  /* Confirmation Modal */
+  .confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: var(--spacing-md);
+  }
+
+  .confirm-modal {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    max-width: 400px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .confirm-title {
+    font-family: 'Otomanopee One', sans-serif;
+    font-size: 1.5rem;
+    color: var(--color-red);
+    margin: 0 0 var(--spacing-md) 0;
+  }
+
+  .confirm-message {
+    color: var(--color-text);
+    margin: 0 0 var(--spacing-xl) 0;
+    line-height: 1.5;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+  }
+
+  .btn-cancel-logout {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-bg-light);
+    border: none;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel-logout:hover {
+    background: #e0e0e0;
+  }
+
+  .btn-confirm-logout {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-red);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-confirm-logout:hover {
+    background: #a32e34;
+  }</style>
